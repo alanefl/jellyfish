@@ -8,7 +8,7 @@ Keep all topology definitions for PA2 in this file.
 
 """
 
-NUM_PORTS = 6
+NUM_PORTS = 3
 
 class JellyfishTopo(Topo):
     """
@@ -16,7 +16,7 @@ class JellyfishTopo(Topo):
     r of which are connected to other switches
     They are connected to each other using the jellyfish algorithm
     """
-    def build(self, n=6, k=NUM_PORTS, r=3):
+    def build(self, n=4, k=NUM_PORTS, r=2):
         if r is None: r = k-1
         self.switch_ports_remaining = dict()
         self.temp_links = []

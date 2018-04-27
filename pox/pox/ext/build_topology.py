@@ -28,10 +28,15 @@ def test_ping(net):
     can ping each other.
     """
     print("\n\n==== Running ping all test ...")
-    net.start()
-    sleep(3)
-    net.pingAll()
-    net.stop()
+
+    try:
+        net.start()
+        sleep(3)
+        net.pingAll()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        net.stop()
 
 
 # Set up argument parser.
