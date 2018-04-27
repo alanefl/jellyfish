@@ -14,42 +14,53 @@ from mininet.node import Controller
 from mininet.node import RemoteController
 from mininet.cli import CLI
 sys.path.append("../../")
-from pox.ext.jelly_pox import JellyfishController
 from subprocess import Popen
 from time import sleep, time
 
-from topologies import JellyfishTopo, FatTreeTopo, DummyTopo
+# These two map strings to class constructors for
+# controllers and topologies.
+from pox.ext.controllers import controllers
+from topologies import topologies
 
 def test_ping(net):
     """
     Simple test to make sure all hosts in a topology
     can ping each other.
     """
+    print("\n\n==== Running ping all test ...")
     net.start()
     sleep(3)
     net.pingAll()
     net.stop()
 
+
+# Set up argument parser.
+
 parser = argparse.ArgumentParser()
 parser.add_argument('-display', action='store_true')
+parser.add_argument('-c','--controller',
+    help='What controller from pox.ext.controllers to use', required=True)
+
+#TODO: we need to be able to give topology constructor arguments
+#      from the command line.
+parser.add_argument('-t','--topology',
+    help='What topology from pox.ext.topologies to use', required=True)
 
 if __name__ == '__main__':
 
-    args = parser.parse_args()
+    args = vars(parser.parse_args())
 
-    # Create topology
-    #topo = JellyfishTopo(n=6, k=6)
-    topo = DummyTopo()
+    topo = topologies[args['topology']]()
 
     # Create Mininet network with a custom controller
     net = Mininet(topo=topo, host=CPULimitedHost, link = TCLink,
-        controller=JellyfishController)
+        controller=controllers[args['controller']])
 
     # Run ping all experiment
     test_ping(net)
 
     # Display the topology
-    if args.display:
+    if args['display']:
         g = nx.Graph()
         g.add_nodes_from(topo.nodes())
         g.add_edges_from(topo.links())

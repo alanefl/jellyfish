@@ -3,11 +3,11 @@ import os
 
 POXDIR = os.getcwd() + '/../..'
 
-class JellyfishController( Controller ):
+class StarterController( Controller ):
     def __init__( self, name, cdir=POXDIR,
-                  command='python pox.py', cargs=('log --file=jelly.log,w openflow.of_01 --port=%s ext.jelly_controller' ),
+                  command='python pox.py', cargs=('log --file=jelly.log,w openflow.of_01 --port=%s ext.starter_controller' ),
                   **kwargs ):
         Controller.__init__( self, name, cdir=cdir,
                              command=command,
                              cargs=cargs, **kwargs )
-controllers={ 'jelly': JellyfishController }
+controllers={ 'starter': StarterController }
