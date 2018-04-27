@@ -1,6 +1,11 @@
+#!/usr/bin/python
+
 import os
 import sys
-from mininet.topo import Topo
+import networkx as nx
+import matplotlib.pyplot as plt
+import argparse
+
 from mininet.net import Mininet
 from mininet.node import CPULimitedHost
 from mininet.link import TCLink
@@ -9,36 +14,44 @@ from mininet.node import Controller
 from mininet.node import RemoteController
 from mininet.cli import CLI
 sys.path.append("../../")
-from pox.ext.jelly_pox import JELLYPOX
+from pox.ext.jelly_pox import JellyfishController
 from subprocess import Popen
 from time import sleep, time
 
-class JellyFishTop(Topo):
-    ''' TODO, build your topology here'''
-    def build(self):
+from topologies import JellyfishTopo, FatTreeTopo, DummyTopo
 
-            leftHost = self.addHost( 'h1' )
-            rightHost = self.addHost( 'h2' )
-            leftSwitch = self.addSwitch( 's3' )
-            rightSwitch = self.addSwitch( 's4' )
+def test_ping(net):
+    """
+    Simple test to make sure all hosts in a topology
+    can ping each other.
+    """
+    net.start()
+    sleep(3)
+    net.pingAll()
+    net.stop()
 
-            # Add links
-            self.addLink( leftHost, leftSwitch )
-            self.addLink( leftSwitch, rightSwitch )
-            self.addLink( rightSwitch, rightHost )
+parser = argparse.ArgumentParser()
+parser.add_argument('-display', action='store_true')
 
+if __name__ == '__main__':
 
-def experiment(net):
-        net.start()
-        sleep(3)
-        net.pingAll()
-        net.stop()
+    args = parser.parse_args()
 
-def main():
-	topo = JellyFishTop()
-	net = Mininet(topo=topo, host=CPULimitedHost, link = TCLink, controller=JELLYPOX)
-	experiment(net)
+    # Create topology
+    #topo = JellyfishTopo(n=6, k=6)
+    topo = DummyTopo()
 
-if __name__ == "__main__":
-	main()
+    # Create Mininet network with a custom controller
+    net = Mininet(topo=topo, host=CPULimitedHost, link = TCLink,
+        controller=JellyfishController)
 
+    # Run ping all experiment
+    test_ping(net)
+
+    # Display the topology
+    if args.display:
+        g = nx.Graph()
+        g.add_nodes_from(topo.nodes())
+        g.add_edges_from(topo.links())
+        nx.draw(g, with_labels=True)
+        plt.show()
