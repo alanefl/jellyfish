@@ -61,6 +61,8 @@ if __name__ == '__main__':
 
     # Display the topology
     if args['display']:
+
+        print("\n\n==== Displaying topology ...")
         g = nx.Graph()
         g.add_nodes_from(topo.nodes())
         g.add_edges_from(topo.links())
