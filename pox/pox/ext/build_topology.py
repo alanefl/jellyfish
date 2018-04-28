@@ -55,6 +55,7 @@ if __name__ == '__main__':
 
     args = vars(parser.parse_args())
 
+    random_seed = 5 # TODO: propagate this to both, instead of hardcode
     topo = topologies[args['topology']]()
 
     # Create Mininet network with a custom controller
@@ -66,7 +67,6 @@ if __name__ == '__main__':
 
     # Display the topology
     if args['display']:
-
         print("\n\n==== Displaying topology ...")
         g = nx.Graph()
         g.add_nodes_from(topo.nodes())

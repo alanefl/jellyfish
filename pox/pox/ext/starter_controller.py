@@ -37,6 +37,7 @@ class Tutorial (object):
     # Keep track of the connection to the switch so that we can
     # send it messages!
     self.connection = connection
+    log.info(connection.dpid)
 
     # This binds our PacketIn event listener
     connection.addListeners(self)

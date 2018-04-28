@@ -13,11 +13,17 @@ NUM_PORTS = 3
 class JellyfishTopo(Topo):
     """
     Creates a topology with n switches, each of which has k ports,
-    r of which are connected to other switches
+    r of which are connected to other switchesit's
     They are connected to each other using the jellyfish algorithm
     """
-    def build(self, n=4, k=NUM_PORTS, r=2):
-        if r is None: r = k-1
+    def build(self, n=4, k=NUM_PORTS, r=2, random_seed=0):
+
+        r = k - 1 if r is None else r
+
+        # For reproducing the topology in the controller and in the
+        # Mininet instance.
+        random.seed(random_seed)
+
         self.switch_ports_remaining = dict()
         self.temp_links = []
 
@@ -42,9 +48,9 @@ class JellyfishTopo(Topo):
     def make_jellyfish_topo(self):
         # while possible, join two random switches with free ports
         while True:
-            avail = self.find_available_pairs()
-            if not avail: break
-            p = avail[0]
+            p = self.next_pair()
+            if not p:
+                break
             self.temp_links.append(p)
             self.switch_ports_remaining[p[0]] -= 1
             self.switch_ports_remaining[p[1]] -= 1
@@ -65,42 +71,43 @@ class JellyfishTopo(Topo):
                 self.temp_links.add((s, l[0]))
                 self.temp_links.add((s, l[1]))
 
-    def find_available_pairs(self):
+    def next_pair(self):
+        """
+        Get the next random switch pair to connect.
+        """
         avail = filter(lambda s: self.switch_ports_remaining[s] > 0, self.switches())
         pairs = itertools.combinations(avail, 2)
         pairs = filter(lambda p: p not in self.temp_links, pairs)
         random.shuffle(pairs)
-        return pairs
-
-    def generate_rtable(self):
-        """
-        TODO: figure out the proper way to do custom routing in mininet...
-        may there will be open source implementations!
-        This may be helpful for implementing k shortest path routing:
-        http://thinkingscale.com/k-shortest-paths-cpp-version/
-        """
-        pass
+        return None if len(pairs) == 0 else pairs[0]
 
 class DummyTopo(Topo):
     """
     Creates a very simple topology:
 
-            h0 -- s0 -- h1
+            hx -- sy -- hz
 
     Used to test that the ECMP/k-shortest-paths controllers
     are working fine.
     """
 
-    def build(self):
+    def build(self, random_seed=0):
 
-        # Add hosts and switches
-        leftHost = self.addHost( 'h0' )
-        rightHost = self.addHost( 's0' )
-        switch = self.addSwitch( 'h1' )
+        random.seed(random_seed)
+        x = random.randint(0, 9)
+
+        # Add hosts and switches.
+        #   Add some randomness to exercise the random seed functionality
+        #   (we want exact same topology to be built for the mininet instance
+        #   as for the controller class)
+
+        leftHost = self.addHost('h%d' % x)
+        rightHost = self.addHost('h%d' % (x + 1))
+        switch = self.addSwitch('s%d' % (x + 2))
 
         # Add links
-        self.addLink( leftHost, switch )
-        self.addLink( switch, rightHost )
+        self.addLink(leftHost, switch)
+        self.addLink(switch, rightHost)
 
         return
 
@@ -112,4 +119,4 @@ class FatTreeTopo(Topo):
     """
     pass
 
-topologies = {'ft': FatTreeTopo, 'jelly': JellyfishTopo, 'dummy': DummyTopo}
+topologies = {'ft': FatTreeTopo, 'jellyfish': JellyfishTopo, 'dummy': DummyTopo}

@@ -29,31 +29,36 @@ n-way ECMP works, roughly, by:
 """
 
 from pox.core import core
+from pox.lib.util import dpidToStr
+from utils import build_topology, build_routing
+from pox.lib.revent import EventMixin
 import pox.openflow.libopenflow_01 as of
 
 log = core.getLogger()
 
-class JellyfishController (object):
+class JellyfishController (EventMixin):
   """
   An JellyfishController object is created once, and it is in charge of instantiating
   all of the switches in the Controller as they come up in the mininet topology.
+
+  A JellyfishController subclasses EventMixin, because it is triggered when
+  certain events happen in the mininet network.
 
   The Jellyfish Controller consumes ALL packet_in events and demultiplexes
   them to the correct switch and switch action, after determining what
   action must occur using an internal routing class.
   """
-  def __init__ (self, connection, routing):
+  def __init__ (self, topology, routing):
     # Keep track of the connection to the switch so that we can
     # send it messages!
-    self.connection = connection
     self.routing = routing
+    self.switches = {}  # Switches seen: [dpid] -> Switch
+    self.topology = topology  # Master Topo object, passed in and never modified.
+    self.routing = routing  # Master Routing object, passed in and reused.
+    self.all_switches_up = False  # Sequences event handling.
 
-    # This binds our PacketIn event listener
-    connection.addListeners(self)
-
-    # Use this table to keep track of which ethernet address is on
-    # which switch port (keys are MACs, values are ports).
-    self.mac_to_port = {}
+    # Make this controller listen to all openflow events
+    self.listenTo(core.openflow, priority=0)
 
 
   def send_packet (self, packet_in, out_port):
@@ -125,12 +130,52 @@ class JellyfishController (object):
       # This part looks familiar, right?
       self.send_packet(packet_in, out_port)
 
+  def _handle_ConnectionUp (self, event):
+    """
+    Is called whenever a switch in the Mininet topoplogy comes up,
+    and registers it in the controller.
+    """
+    switch_dpid = event.dpid
+    switch = self.switches.get(event.dpid)
 
+    # The name of the switch as known by the topology object.
+    name_str = "s%d" % switch_dpid
+
+    # Controller ignores switch if this is not a switch we recognize.
+    if name_str not in self.t.switches():
+      log.warn("Ignoring unknown switch %s" % sw_str)
+      return
+
+    # We expect the switch to be None, so we create it.
+    if switch is None:
+      log.info("Added fresh switch %s" % name_str)
+      switch = Switch()
+      self.switches[event.dpid] = switch
+      switch.connect(event.connection) # Connect the switch to this event.
+
+    else:
+      log.warn("Odd - already saw switch %s come up" % sw_str)
+      exit(0)
+
+    if len(self.switches) == len(self.t.switches()):
+      log.info("Woo!  All switches up")
+      self.all_switches_up = True
+      if self.mode == 'proactive':
+        self._install_proactive_flows()
+      if self.mode == 'hybrid':
+        self._install_hybrid_static_flows()
 
   def _handle_PacketIn (self, event):
     """
     Handles packet in messages from the switch.
     """
+    switch_dpid = event.dpid
+
+    # TODO: we need to take an action based on the switch this event
+    #       was encountered in.
+
+    # TODO: we need to use the global routing object to decide what
+    #       egress port to route this thing out of.
 
     packet = event.parsed # This is the parsed packet data.
     if not packet.parsed:
@@ -138,22 +183,25 @@ class JellyfishController (object):
       return
 
     packet_in = event.ofp # The actual ofp_packet_in message.
-
-    # Comment out the following line and uncomment the one after
-    # when starting the exercise.
-    log.info("Src: " + str(packet.src))
-    log.info("Dest: " + str(packet.dst))
-    log.info("Event port: " + str(event.port))
     self.forward_packet(packet, packet_in)
 
 
 
-def launch ():
+def launch (topo=None, routing=None):
   """
-  Starts the ECMP Switch
+  Starts the Controller:
+
+      - topo is a string with comma-separated arguments specifying what
+        topology to build.
+          e.g.: 'jellyfish,4' 'dummy'
+
+      - routing is a string indicating what routing mechanism to use:
+          e.g.: 'ecmp', 'k-shortest-paths'
   """
-  log.info("LAUNCHING SWITCH")
-  def start_switch (event):
-    log.debug("Controlling %s" % (event.connection,))
-    ECMPSmartSwitch(event.connection, routing="todo")
-  core.openflow.addListenerByName("ConnectionUp", start_switch)
+  log.info("Launching controller")
+  if not topo or not routing:
+    raise Exception("Topology and Routing mechanism must be specified.")
+
+  my_topology = build_topology(topo)
+  my_routing = build_routing(routing, my_topology)
+  core.registerNew(JellyfishController, my_topology, my_routing)
