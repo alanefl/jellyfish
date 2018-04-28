@@ -62,8 +62,8 @@ class JellyfishTopo(Topo):
             if possible:
                 l = possible[0]
                 self.temp_links.remove(l)
-                self.temp_links.add((s, l[0]))
-                self.temp_links.add((s, l[1]))
+                self.temp_links.append((s, l[0]))
+                self.temp_links.append((s, l[1]))
 
     def find_available_pairs(self):
         avail = filter(lambda s: self.switch_ports_remaining[s] > 0, self.switches())
@@ -113,3 +113,11 @@ class FatTreeTopo(Topo):
     pass
 
 topologies = {'ft': FatTreeTopo, 'jelly': JellyfishTopo, 'dummy': DummyTopo}
+
+from routing import Routing
+
+if __name__ == '__main__':
+    # Create Jellyfish Topology
+    topo = JellyfishTopo()
+    routing = Routing(topo, 'kshort')
+    for i in routing.rtable.items(): print(i)
