@@ -68,8 +68,8 @@ class JellyfishTopo(Topo):
             if possible:
                 l = possible[0]
                 self.temp_links.remove(l)
-                self.temp_links.add((s, l[0]))
-                self.temp_links.add((s, l[1]))
+                self.temp_links.append((s, l[0]))
+                self.temp_links.append((s, l[1]))
 
     def next_pair(self):
         """
@@ -119,4 +119,12 @@ class FatTreeTopo(Topo):
     """
     pass
 
-topologies = {'ft': FatTreeTopo, 'jellyfish': JellyfishTopo, 'dummy': DummyTopo}
+topologies = {'ft': FatTreeTopo, 'jelly': JellyfishTopo, 'dummy': DummyTopo}
+
+from routing import Routing
+
+if __name__ == '__main__':
+    # Create Jellyfish Topology
+    topo = JellyfishTopo()
+    routing = Routing(topo, 'kshort')
+    for i in routing.rtable.items(): print(i)
