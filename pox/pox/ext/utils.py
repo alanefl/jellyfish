@@ -26,11 +26,5 @@ def build_topology(topo):
         raise Exception( 'Invalid topo_name %s' % topo_name )
     return topologies[topo_name](*topo_seq_params, **topo_kw_params)
 
-def build_routing(routing, topo_obj):
-    """
-    - routing is a string indicating what topology to build
-    - topo_obj is a built topology object to use in building the routing class
-    """
-
-    # TODO: fill this in.
-    return routing
+def dpid_to_str(dpid):
+    return "s%d" % dpid
