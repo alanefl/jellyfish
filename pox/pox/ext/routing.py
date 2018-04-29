@@ -59,3 +59,11 @@ class Routing():
     def get_egress_port(self, packet, switch_dpid):
         return of.OFPP_FLOOD
         pass # TODO: implement.
+
+    def register_switch(self, switch):
+        """
+        This is called whenever a new switch comes up in a topology.
+
+        TODO: set whatever internal Routing state is needed.
+        """
+        pass

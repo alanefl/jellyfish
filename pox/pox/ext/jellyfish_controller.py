@@ -86,6 +86,9 @@ class JellyfishController (EventMixin):
       self.switches[event.dpid] = switch
       switch.connect(event.connection) # Connect the switch to this event.
 
+      # Give the Routing class the new switch object for registration.
+      self.routing.register_switch(switch)
+
     else:
       log.warn("Odd - already saw switch %s come up" % sw_str)
       exit(0)

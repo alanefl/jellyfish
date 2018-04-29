@@ -13,7 +13,7 @@ NUM_PORTS = 3
 class JellyfishTopo(Topo):
     """
     Creates a topology with n switches, each of which has k ports,
-    r of which are connected to other switchesit's
+    r of which are connected to other switches.
     They are connected to each other using the jellyfish algorithm
     """
     def build(self, n=4, k=NUM_PORTS, r=2, random_seed=0):
