@@ -1,7 +1,14 @@
+# Routing logic.  T
+
 from collections import defaultdict
+import pox.openflow.libopenflow_01 as of
 import networkx as nx
 
 class Routing():
+    """
+    The routing object lives inside a Controller and is in charge of
+    returning what egress port a packet should exit from some switch.
+    """
     def __init__(self, topo, rproto):
         path_fn = None
 
@@ -48,3 +55,15 @@ class Routing():
                 rtable[src][dst] = [port_map[src][p[1]] for p in paths]
 
         return rtable
+
+    def get_egress_port(self, packet, switch_dpid):
+        return of.OFPP_FLOOD
+        pass # TODO: implement.
+
+    def register_switch(self, switch):
+        """
+        This is called whenever a new switch comes up in a topology.
+
+        TODO: set whatever internal Routing state is needed.
+        """
+        pass

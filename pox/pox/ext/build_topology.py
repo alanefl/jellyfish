@@ -19,7 +19,7 @@ from time import sleep, time
 
 # These two map strings to class constructors for
 # controllers and topologies.
-from pox.ext.controllers import controllers
+from pox.ext.controllers import JellyfishController
 from topologies import topologies
 
 def test_ping(net):
@@ -43,8 +43,6 @@ def test_ping(net):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-display', action='store_true')
-parser.add_argument('-c','--controller',
-    help='What controller from pox.ext.controllers to use', required=True)
 
 #TODO: we need to be able to give topology constructor arguments
 #      from the command line.
@@ -55,18 +53,18 @@ if __name__ == '__main__':
 
     args = vars(parser.parse_args())
 
+    random_seed = 5 # TODO: propagate this to both, instead of hardcode
     topo = topologies[args['topology']]()
 
     # Create Mininet network with a custom controller
     net = Mininet(topo=topo, host=CPULimitedHost, link = TCLink,
-        controller=controllers[args['controller']])
+        controller=JellyfishController)
 
     # Run ping all experiment
     test_ping(net)
 
     # Display the topology
     if args['display']:
-
         print("\n\n==== Displaying topology ...")
         g = nx.Graph()
         g.add_nodes_from(topo.nodes())
