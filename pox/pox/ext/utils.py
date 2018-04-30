@@ -28,6 +28,3 @@ def build_topology(topo):
 
 def dpid_to_str(dpid):
     return "s%d" % dpid
-
-def node_name_to_dpid(host_name):
-    return int(host_name[1:])
