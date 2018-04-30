@@ -142,5 +142,6 @@ def launch (topo=None, routing=None):
     raise Exception("Topology and Routing mechanism must be specified.")
 
   my_topology = build_topology(topo)
-  my_routing = Routing(my_topology, routing)
+  my_routing = Routing(my_topology, routing, log)
+  log.info("Launching routing")
   core.registerNew(JellyfishController, my_topology, my_routing)

@@ -28,10 +28,14 @@ class JellyfishTopo(Topo):
         self.temp_links = []
 
         # add n switches, each attached to k hosts
+        # The number x in (s|h)x must be globally unique
+        # across the topology.
         for i in range(n):
-            s = self.addSwitch('s{}'.format(i))
+            sdpid = 2*i
+            s = self.addSwitch('s{}'.format(sdpid))
             for j in range(k-r):
-                h = self.addHost('h{}_{}'.format(i, j))
+                hdpid = 2*i + 1
+                h = self.addHost('h{}'.format(hdpid), mac=dpid_to_mac_addr(hdpid))
                 self.addLink(h, s)
             # Note: to actually add the ports to the switch, we could use
             #       map(s.attach, range(NUM_PORTS))
@@ -81,6 +85,7 @@ class JellyfishTopo(Topo):
         random.shuffle(pairs)
         return None if len(pairs) == 0 else pairs[0]
 
+
 class DummyTopo(Topo):
     """
     Creates a very simple topology:
@@ -96,14 +101,20 @@ class DummyTopo(Topo):
         random.seed(random_seed)
         x = random.randint(0, 9)
 
+
         # Add hosts and switches.
         #   Add some randomness to exercise the random seed functionality
         #   (we want exact same topology to be built for the mininet instance
         #   as for the controller class)
 
-        leftHost = self.addHost('h%d' % x)
-        rightHost = self.addHost('h%d' % (x + 1))
-        switch = self.addSwitch('s%d' % (x + 2))
+        leftHostdpid = x
+        rightHostdpid = x + 1
+        switchdpid = x + 2
+
+
+        leftHost = self.addHost('h%d' % leftHostdpid, mac=dpid_to_mac_addr(leftHostdpid))
+        rightHost = self.addHost('h%d' % rightHostdpid, mac=dpid_to_mac_addr(rightHostdpid))
+        switch = self.addSwitch('s%d' % switchdpid)
 
         # Add links
         self.addLink(leftHost, switch)
@@ -120,6 +131,23 @@ class FatTreeTopo(Topo):
     pass
 
 topologies = {'ft': FatTreeTopo, 'jelly': JellyfishTopo, 'dummy': DummyTopo}
+
+
+# TODO: can't add these to util because of circular imports
+def dpid_to_mac_addr(dpid):
+    """
+    Converts decimal number to string mac address.
+
+    42 ==> "00:00:00:00:00:2a"
+
+    Thanks: https://stackoverflow.com/questions/9020843/how-to-convert-a-mac-number-to-mac-string
+            https://stackoverflow.com/questions/12638408/decorating-hex-function-to-pad-zeros
+    """
+    interm = "{0:0{1}x}".format(dpid,12)
+    return ':'.join(s.encode('hex') for s in interm.decode('hex'))
+
+def node_name_to_dpid(host_name):
+    return int(host_name[1:])
 
 from routing import Routing
 
