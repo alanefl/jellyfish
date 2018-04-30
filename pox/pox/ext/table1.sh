@@ -17,22 +17,34 @@
 #    TODO: can we use monitor functions from mininet to do this easily?
 #
 
-# TODO: what default TCP congestion control mechanism was used?
+# NOTE: assumes TCP default congestion control is cubic or reno.
 
 echo '**** Running test: random permutation traffic, 1 TCP flow ****'
 # 1. Run random permutation traffic test on Jellyfish topology with
 #    780 servers. With congestion control: TCP 1 flow
+#
+#    TODO: actually support this with jellyfish.  This is a placeholder.
+sudo sysctl -w net.mptcp.mptcp_enabled=0 # Turn off MPTCP
 sudo python run_test.py -randpermtraffic --flows 1 -t dummy
+
 
 exit
 
 echo '**** Running test: random permutation traffic, 8 TCP flows ****'
 # 2. Run random permutation traffic test on Jellyfish topology with
 #    780 servers. With congestion control: TCP 8 flows
+#    TODO: actually support this with jellyfish.  This is a placeholder.
 sudo python run_test.py -randpermtraffic --flows 8 -t dummy
 
 # NOTE: Using MPTCP as described here:
 #    - https://multipath-tcp.org/pmwiki.php/Users/AptRepository
 #
+#      Reference for getting MPTCP to work: https://github.com/bocon13/mptcp_setup
+#
 # 3. Run random permutation traffic test on Jellyfish topology with
 #    780 servers. With congestion control: MPTCP 8 subflows
+#
+#    TODO: actually support this with jellyfish.  This is a placeholder.
+sudo sysctl -w net.mptcp.mptcp_enabled=1 # Turn on MPTCP
+sudo python run_test.py -randpermtraffic --flows 8 -t dummy
+sudo sysctl -w net.mptcp.mptcp_enabled=0 # Turn off MPTCP again

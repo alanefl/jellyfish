@@ -40,22 +40,6 @@ def test_ping(net):
     finally:
         net.stop()
 
-def iperf_test(net):
-    """
-    Simple test to make sure all hosts in a topology
-    can ping each other.
-    """
-    print("\n\n==== Running iperf ...")
-
-    try:
-        net.start()
-        sleep(1)
-        net.iperf()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        net.stop()
-
 def get_permutation_traffic_dict(hosts):
     """
     Returns a dictionary that specifies what host
@@ -72,12 +56,38 @@ def get_permutation_traffic_dict(hosts):
         del hosts_[send_idx]
     return send_dict
 
-def monitor_opens(popens):
+
+def update_server_throughputs(host_lines, host_throughput, rounds):
+    for h in host_lines:
+        if h not in host_throughput:
+            host_throughput[h] = 0
+        host_throughput[h] += float(host_lines[h].split()[-2]) / rounds
+
+def monitor_throughput(popens, P, rounds, host_throughput):
+    """
+    Prints process information from different network hosts.
+    See: https://github.com/mininet/mininet/blob/master/examples/popen.py
+
+    The purpose of this is to catch the throughput measurements of
+    the various iperf tasks.
+    """
+    host_lines = {}
     for host, line in pmonitor(popens):
         if host:
+
+            # Catch the lines of output we care about
+            if P == 1:
+                if 'Bytes' in line:
+                    host_lines[host.name] = line.strip()
+            else:
+                if '[SUM]' in line:
+                    host_lines[host.name] = line.strip()
             print("<%s>: %s" % (host.name, line.strip()))
 
-def rand_perm_traffic(net, P=1):
+    # Update the per-server throughput values
+    update_server_throughputs(host_lines, host_throughput, rounds)
+
+def rand_perm_traffic(net, P=1, rounds=5):
     """
     Tests the topology using random permutation traffic,
     as descibed in the Jellyfish paper.
@@ -86,32 +96,35 @@ def rand_perm_traffic(net, P=1):
         to another host.
     """
     send_dict = get_permutation_traffic_dict(net.topo.hosts())
+    host_throughput = {}
 
     try:
         net.start()
-        popens = {}
-        for h in send_dict:
-            from_host_name = h
-            to_host_name = send_dict[h]
-            from_host, to_host = net.getNodeByName(from_host_name, to_host_name)
-            from_ip = from_host.IP()
-            to_ip = to_host.IP()
-            print("\n=== Sending from %s:%s to %s:%s" % (from_host_name, from_ip, to_host_name, to_ip))
+        for i in range(rounds):
+            print(" \n ROUND %d \n" % (i+1))
+            popens = {}
+            for h in send_dict:
+                from_host_name = h
+                to_host_name = send_dict[h]
+                from_host, to_host = net.getNodeByName(from_host_name, to_host_name)
+                from_ip = from_host.IP()
+                to_ip = to_host.IP()
+                #print("\n=== Sending from %s:%s to %s:%s" % (from_host_name, from_ip, to_host_name, to_ip))
 
-            # Set iperf server on target host
-            to_host.popen('iperf -s')
+                # Set iperf server on target host
+                to_host.popen('iperf -s')
 
-            # Set an iperf client on client host
-            popens[from_host] = from_host.popen('iperf -c %s -P %s' % (to_ip, P))
+                # Set an iperf client on client host
+                popens[from_host] = from_host.popen('iperf -c %s -P %s' % (to_ip, P))
 
-        # Get the output from the iperf commands.
-        monitor_opens(popens)
+            # Get the output from the iperf commands.
+            monitor_throughput(popens, P, rounds, host_throughput)
 
     except KeyboardInterrupt:
         pass
     finally:
         net.stop()
-
+        print(host_throughput) # values in GBits/s
 
 # Set up argument parser.
 
@@ -119,7 +132,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-display', action='store_true')
 parser.add_argument('-pingtest', action='store_true')
 parser.add_argument('-randpermtraffic', action='store_true')
-parser.add_argument('-iperf', action='store_true')
 
 
 #TODO: we need to be able to give topology constructor arguments
@@ -136,12 +148,10 @@ if __name__ == '__main__':
 
     # TODO (nice to have): propagate this to both, instead of hardcoding it
     random_seed = None
-
     topo = topologies[args['topology']]()
 
     # Create Mininet network with a custom controller
-    net = Mininet(topo=topo, host=CPULimitedHost, link = TCLink)
-       # controller=JellyfishController)
+    net = Mininet(topo=topo, controller=JellyfishController)#, host=CPULimitedHost, link=TCLink) TODO: why do these arguments fail?
 
     if args['pingtest']:
         # Run ping all experiment
@@ -152,8 +162,6 @@ if __name__ == '__main__':
         if 'flows' in args:
             P = int(args['flows'])
         rand_perm_traffic(net, P=P)
-    elif args['iperf']:
-        iperf_test(net)
 
     # Display the topology
     if args['display']:
