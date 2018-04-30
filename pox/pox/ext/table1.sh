@@ -25,7 +25,7 @@ echo '**** Running test: random permutation traffic, 1 TCP flow ****'
 #
 #    TODO: actually support this with jellyfish.  This is a placeholder.
 sudo sysctl -w net.mptcp.mptcp_enabled=0 # Turn off MPTCP
-sudo python run_test.py -randpermtraffic --flows 1 -t dummy
+sudo python run.py -randpermtraffic --flows 1 -t dummy
 
 
 exit
@@ -34,7 +34,7 @@ echo '**** Running test: random permutation traffic, 8 TCP flows ****'
 # 2. Run random permutation traffic test on Jellyfish topology with
 #    780 servers. With congestion control: TCP 8 flows
 #    TODO: actually support this with jellyfish.  This is a placeholder.
-sudo python run_test.py -randpermtraffic --flows 8 -t dummy
+sudo python run.py -randpermtraffic --flows 8 -t dummy
 
 # NOTE: Using MPTCP as described here:
 #    - https://multipath-tcp.org/pmwiki.php/Users/AptRepository
@@ -46,5 +46,5 @@ sudo python run_test.py -randpermtraffic --flows 8 -t dummy
 #
 #    TODO: actually support this with jellyfish.  This is a placeholder.
 sudo sysctl -w net.mptcp.mptcp_enabled=1 # Turn on MPTCP
-sudo python run_test.py -randpermtraffic --flows 8 -t dummy
+sudo python run.py -randpermtraffic --flows 8 -t dummy
 sudo sysctl -w net.mptcp.mptcp_enabled=0 # Turn off MPTCP again
