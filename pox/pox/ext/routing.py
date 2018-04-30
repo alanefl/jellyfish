@@ -1,25 +1,32 @@
 # Routing logic.  T
 
 from collections import defaultdict
+from topologies import dpid_to_mac_addr, node_name_to_dpid
 import pox.openflow.libopenflow_01 as of
 import networkx as nx
 
-class Routing():
+class Routing(object):
     """
     The routing object lives inside a Controller and is in charge of
     returning what egress port a packet should exit from some switch.
     """
-    def __init__(self, topo, rproto):
+    def __init__(self, topo, rproto, log):
         path_fn = None
 
+        self.log = log
         if rproto == 'kshort':
             path_fn = self.k_shortest_paths
         elif rproto == 'ecmp':
             path_fn = self.ecmp_paths
 
         if not path_fn: raise Exception('Unknown routing protocol')
-
         self.rtable = self.generate_dports(topo, path_fn)
+
+        self.mac_to_hostname = {} # Maps host MAC addresses to hostnames.
+        for host in topo.hosts():
+            self.mac_to_hostname[dpid_to_mac_addr(node_name_to_dpid(host))] = host
+        self.log.info(self.mac_to_hostname)
+
 
     def k_shortest_paths(self, g, src, dst):
         paths = list(nx.all_simple_paths(g, src, dst))
