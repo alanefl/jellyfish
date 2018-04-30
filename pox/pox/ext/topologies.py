@@ -127,4 +127,5 @@ if __name__ == '__main__':
     # Create Jellyfish Topology
     topo = JellyfishTopo()
     routing = Routing(topo, 'kshort')
-    for i in routing.rtable.items(): print(i)
+    for i in routing.rtable.items():
+        print(i)
