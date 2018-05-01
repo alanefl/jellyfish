@@ -14,6 +14,8 @@ import yens
 class Routing():
     def __init__(self, topo, rproto, log):
         self.topo = topo
+        self.log = log
+
         self.set_path_fn(rproto)
 
         self.mac_to_hostname = {} # Maps host MAC addresses to hostnames.
