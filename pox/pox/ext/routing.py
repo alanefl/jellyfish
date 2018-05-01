@@ -6,12 +6,20 @@ import networkx as nx
 import itertools
 import random
 
+from topologies import dpid_to_mac_addr, node_name_to_dpid
+import pox.openflow.libopenflow_01 as of
+
 import yens
 
 class Routing():
-    def __init__(self, topo, rproto):
+    def __init__(self, topo, rproto, log):
         self.topo = topo
         self.set_path_fn(rproto)
+
+        self.mac_to_hostname = {} # Maps host MAC addresses to hostnames.
+        for host in topo.hosts():
+            self.mac_to_hostname[dpid_to_mac_addr(node_name_to_dpid(host))] = host
+        self.log.info(self.mac_to_hostname)
 
     def set_path_fn(self, rproto):
         self.path_fn = None
@@ -93,3 +101,15 @@ class Routing():
             for e in edges:
                 edge_counts[e] += 1
         return edge_counts
+
+    def get_egress_port(self, packet, switch_dpid):
+        return of.OFPP_FLOOD
+        pass # TODO: implement.
+
+    def register_switch(self, switch):
+        """
+        This is called whenever a new switch comes up in a topology.
+
+        TODO: set whatever internal Routing state is needed.
+        """
+        pass
