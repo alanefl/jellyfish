@@ -22,7 +22,7 @@ from time import sleep, time
 # These two map strings to class constructors for
 # controllers and topologies.
 from pox.ext.controllers import JellyfishController
-from topologies import topologies
+from topologies import topologies, dpid_to_ip_addr
 
 def test_ping(net):
     """
@@ -125,6 +125,9 @@ def rand_perm_traffic(net, P=1, rounds=5):
     finally:
         net.stop()
         print(host_throughput) # values in GBits/s
+        avg_throughput = float(sum(host_throughput.values())) / len(host_throughput.items())
+        # TODO: figure out actual nic rate
+        print('Average throughput: {}, Percentage of NIC rate: {}'.format(avg_throughput, avg_throughput/10.0))
 
 # Set up argument parser.
 
@@ -152,6 +155,15 @@ if __name__ == '__main__':
 
     # Create Mininet network with a custom controller
     net = Mininet(topo=topo, controller=JellyfishController)#, host=CPULimitedHost, link=TCLink) TODO: why do these arguments fail?
+
+    """
+    NOTE: to set the IPs of the switches you can do
+    for n in net.switches:
+        n.setIP(dpid_to_ip_addr(int(n.dpid)))
+    However, this currently causes a weird crash in core, such that
+    the line core.registerNew(JellyfishController, my_topology, my_routing)
+    in jellyfish_controller.py never seems to finish executing
+    """
 
     if args['pingtest']:
         # Run ping all experiment
