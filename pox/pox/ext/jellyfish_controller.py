@@ -16,6 +16,8 @@
 JellyfishController class.
 """
 
+import sys
+sys.path.append("../../")
 from pox.core import core
 from pox.lib.util import dpidToStr
 from utils import build_topology, dpid_to_str
@@ -24,7 +26,11 @@ import pox.openflow.libopenflow_01 as of
 from routing import Routing
 from switch import Switch
 
-log = core.getLogger()
+class FakeLogger():
+  def info(self, txt):
+    print(txt)
+
+log = core.getLogger() if core else FakeLogger()
 
 class JellyfishController (EventMixin):
   """
@@ -42,9 +48,6 @@ class JellyfishController (EventMixin):
     # Keep track of the connection to the switch so that we can
     # send it messages!
     self.routing = routing
-    for i in routing.rtable.items():
-      log.info(i)
-
     self.switches = {}  # Switches seen: [dpid] -> Switch
     self.topology = topology  # Master Topo object, passed in and never modified.
     self.routing = routing  # Master Routing object, passed in and reused.
@@ -67,6 +70,7 @@ class JellyfishController (EventMixin):
     Is called whenever a switch in the Mininet topoplogy comes up,
     and registers it in the controller.
     """
+    log.info('Connection up')
 
     switch_dpid = event.dpid
     switch = self.switches.get(event.dpid)
@@ -114,6 +118,7 @@ class JellyfishController (EventMixin):
       return
 
     # What port should we send this packet out from?
+    log.info('Getting egress port')
     egress_port = self.routing.get_egress_port(packet, switch_dpid)
     switch = self.switches.get(switch_dpid)
 
@@ -143,5 +148,14 @@ def launch (topo=None, routing=None):
 
   my_topology = build_topology(topo)
   my_routing = Routing(my_topology, routing, log)
+  my_routing.generate_rtable()
   log.info("Launching routing")
   core.registerNew(JellyfishController, my_topology, my_routing)
+
+# for debugging
+if __name__ == '__main__':
+  topo = 'dummy'
+  routing = 'ecmp'
+  my_topology = build_topology(topo)
+  my_routing = Routing(my_topology, routing, log)
+  my_routing.generate_rtable()
