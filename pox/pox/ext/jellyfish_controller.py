@@ -67,7 +67,6 @@ class JellyfishController (EventMixin):
     Is called whenever a switch in the Mininet topoplogy comes up,
     and registers it in the controller.
     """
-
     switch_dpid = event.dpid
     switch = self.switches.get(event.dpid)
 
@@ -135,7 +134,7 @@ def launch (topo=None, routing=None):
           e.g.: 'jellyfish,4' 'dummy'
 
       - routing is a string indicating what routing mechanism to use:
-          e.g.: 'ecmp', 'kshort'
+          e.g.: 'ecmp8', 'kshort'
   """
   log.info("Launching controller")
   if not topo or not routing:
@@ -145,3 +144,4 @@ def launch (topo=None, routing=None):
   my_routing = Routing(my_topology, routing, log)
   log.info("Launching routing")
   core.registerNew(JellyfishController, my_topology, my_routing)
+  log.info("Registered Jellyfish controller and routing")

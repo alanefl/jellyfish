@@ -16,6 +16,7 @@ class Routing():
         self.topo = topo
         self.log = log
 
+        self.log.info("Setting proto")
         self.set_path_fn(rproto)
 
         self.mac_to_hostname = {} # Maps host MAC addresses to hostnames.
