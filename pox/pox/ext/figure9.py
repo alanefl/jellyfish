@@ -49,8 +49,11 @@ def figure9():
     plt.ylabel('# Distinct Paths Link is on')
     plt.xlabel('Rank of Link')
 
+    print("Started analyzing kshort paths...")
     plot_line(topo, 'kshort', '8 Shortest Paths', 'blue', linewidth=7)
+    print("Finished kshort. Starting ecmp8...")
     plot_line(topo, 'ecmp8', '8-way ECMP', 'olive')
+    print("Finished ecmp64. Starting ecmp64...")
     plot_line(topo, 'ecmp64', '64-way ECMP', 'red', linestyle=':')
 
     plt.legend(loc=2)
