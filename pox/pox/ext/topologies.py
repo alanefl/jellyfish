@@ -15,7 +15,7 @@ class JellyfishTopo(Topo):
     r of which are connected to other switches.
     They are connected to each other using the jellyfish algorithm
     """
-    def build(self, n=4, k=NUM_PORTS, r=None, random_seed=0):
+    def build(self, random_seed=0, n=4, k=NUM_PORTS, r=None):
         if r is None: r = k-1
 
         # For reproducing the topology in the controller and in the
@@ -30,12 +30,17 @@ class JellyfishTopo(Topo):
         # add n switches, each attached to k hosts
         # The number x in (s|h)x must be globally unique
         # across the topology.
-        for i in range(n):
+        for i in range(1,n+1): # so that i is not 0
             sdpid = 2*i
-            s = self.addSwitch('s{}'.format(sdpid))
+            """
+            NOTE: setting the IP of the switch here doesn't seem to do anything,
+                  though the IP of the host is set.
+            """
+            s = self.addSwitch('s{}'.format(sdpid), ip=dpid_to_ip_addr(sdpid))
             for j in range(k-r):
                 hdpid = 2*i + 1
-                h = self.addHost('h{}'.format(hdpid), mac=dpid_to_mac_addr(hdpid))
+                h = self.addHost('h{}'.format(hdpid), mac=dpid_to_mac_addr(hdpid),
+                    ip=dpid_to_ip_addr(hdpid))
                 self.addLink(h, s)
             # Note: to actually add the ports to the switch, we could use
             #       map(s.attach, range(NUM_PORTS))
@@ -147,14 +152,16 @@ def dpid_to_mac_addr(dpid):
     interm = "{0:0{1}x}".format(dpid,12)
     return ':'.join(s.encode('hex') for s in interm.decode('hex'))
 
+def dpid_to_ip_addr(dpid):
+    import socket, struct
+    return socket.inet_ntoa(struct.pack('!L', dpid))
+
 def node_name_to_dpid(host_name):
     return int(host_name[1:])
 
-from routing import Routing
+def dpid_to_switch(dpid):
+    return 's{}'.format(dpid)
 
 if __name__ == '__main__':
     # Create Jellyfish Topology
     topo = JellyfishTopo()
-    routing = Routing(topo, 'kshort')
-    for i in routing.rtable.items():
-        print(i)
