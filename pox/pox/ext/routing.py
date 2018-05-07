@@ -126,8 +126,10 @@ class Routing():
     # find current switch in path, and find egress port to get
     # to next hop in the path
     def get_egress_port(self, packet, switch_dpid):
+
+        # This should actually never happen.
         if str(packet.dst) == 'ff:ff:ff:ff:ff:ff':
-            self.log.info('Broadcasting packet')
+            self.log.warn('Broadcasting packet..')
             return of.OFPP_FLOOD
 
         paths = self.routing_paths[str(packet.src)][str(packet.dst)]

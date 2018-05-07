@@ -52,17 +52,39 @@ class JellyfishController (EventMixin):
     self.topology = topology  # Master Topo object, passed in and never modified.
     self.routing = routing  # Master Routing object, passed in and reused.
     self.all_switches_up = False  # Sequences event handling.
+    self.switch_dst_eth_seen = [] # Keeps track of what (switch, dst_eth) pairs we've seen
 
     # Make this controller listen to openflow events, like when switches come up
     # or when a packet comes into a switch.
     self.listenTo(core.openflow, priority=0)
 
-  def forward(self, packet, switch, egress_port):
+  def forward(self, connection, packet, switch, egress_port):
     """
     Forward a packet along the given egress port of
     the given switch.
+
+    Forwarding actually only happens the first time, because the first time
+    we install a flow rule in the switch so that we don't have to get repeated
+    requests for an egress port.
     """
+
+    if (switch, packet.dst) in self.switch_dst_eth_seen:
+      # This should not happen
+      log.warn("Saw packet heading to to the same place on same switch again :(")
+
     log.info("Sending packet out of port %d from switch %d" % (egress_port, switch.dpid))
+
+    # 1) Tell the switch to always send these packets with this
+    #    destination MAC address from this port
+
+    msg = of.ofp_flow_mod()
+    msg.match.dl_dst = packet.dst
+    msg.actions.append(of.ofp_action_output(port = egress_port))
+    connection.send(msg)
+
+    self.switch_dst_eth_seen.append((switch, packet.dst))
+
+    # 2) But send we have to send this packet out ourselves..
     switch.send_packet_data(egress_port, packet)
 
   def _handle_ConnectionUp (self, event):
@@ -100,6 +122,12 @@ class JellyfishController (EventMixin):
 
     if len(self.switches) == len(self.topology.switches()):
       log.info(" Woo!  All switches up")
+
+    # Not sure if this is necessary: Clear all flow table entries for this switch
+    # But does not affect ping all success.
+    clear = of.ofp_flow_mod(command=of.OFPFC_DELETE)
+    event.connection.send(clear)
+    event.connection.send(of.ofp_barrier_request())
 
 
   def _handle_ConnectionDown (self, event):
@@ -151,7 +179,7 @@ class JellyfishController (EventMixin):
         return
 
     # Send packet along
-    self.forward(packet, switch, egress_port)
+    self.forward(event.connection, packet, switch, egress_port)
 
 def launch (topo=None, routing=None):
   """
