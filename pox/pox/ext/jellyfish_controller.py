@@ -52,17 +52,39 @@ class JellyfishController (EventMixin):
     self.topology = topology  # Master Topo object, passed in and never modified.
     self.routing = routing  # Master Routing object, passed in and reused.
     self.all_switches_up = False  # Sequences event handling.
+    self.switch_dst_eth_seen = [] # Keeps track of what (switch, dst_eth) pairs we've seen
 
     # Make this controller listen to openflow events, like when switches come up
     # or when a packet comes into a switch.
     self.listenTo(core.openflow, priority=0)
 
-  def forward(self, packet, switch, egress_port):
+  def forward(self, connection, packet, switch, egress_port):
     """
     Forward a packet along the given egress port of
     the given switch.
+
+    Forwarding actually only happens the first time, because the first time
+    we install a flow rule in the switch so that we don't have to get repeated
+    requests for an egress port.
     """
+
+    if (switch, packet.dst) in self.switch_dst_eth_seen:
+      # This should not happen
+      log.warn("Saw packet heading to to the same place on same switch again :(")
+
     log.info("Sending packet out of port %d from switch %d" % (egress_port, switch.dpid))
+
+    # 1) Tell the switch to always send these packets with this
+    #    destination MAC address from this port
+
+    msg = of.ofp_flow_mod()
+    msg.match.dl_dst = packet.dst
+    msg.actions.append(of.ofp_action_output(port = egress_port))
+    connection.send(msg)
+
+    self.switch_dst_eth_seen.append((switch, packet.dst))
+
+    # 2) But send we have to send this packet out ourselves..
     switch.send_packet_data(egress_port, packet)
 
   def _handle_ConnectionUp (self, event):
@@ -71,7 +93,8 @@ class JellyfishController (EventMixin):
     and registers it in the controller.
     """
     log.info('Connection up')
-
+    log.info(event.connection.features)
+    log.info(event.ofp)
     switch_dpid = event.dpid
     switch = self.switches.get(event.dpid)
 
@@ -100,6 +123,16 @@ class JellyfishController (EventMixin):
     if len(self.switches) == len(self.topology.switches()):
       log.info(" Woo!  All switches up")
 
+    # Not sure if this is necessary: Clear all flow table entries for this switch
+    # But does not affect ping all success.
+    clear = of.ofp_flow_mod(command=of.OFPFC_DELETE)
+    event.connection.send(clear)
+    event.connection.send(of.ofp_barrier_request())
+
+
+  def _handle_ConnectionDown (self, event):
+    self.switches.get(event.dpid).disconnect()
+
   def _handle_PacketIn (self, event):
     """
     Handles packet in messages for all switches.
@@ -111,14 +144,33 @@ class JellyfishController (EventMixin):
     # What switch are we talking about here?
     switch_dpid = event.dpid
 
+
     # Get packet data
     packet = event.parsed
     if not packet.parsed:
       log.warning("Ignoring incomplete packet.")
       return
 
+    if str(packet.dst) == "ff:ff:ff:ff:ff:ff":
+      # We should not be dealing with any broadcast packets.
+      # These are usually DHCP, we can ignore since we have knowledge
+      # of all topology addressing.
+      return
+
     # What port should we send this packet out from?
-    log.info('Getting egress port')
+
+    # Uncomment stuff below to dump lots of info about the packet we
+    # just received
+
+    """
+    log.info("Event raised on eth address:  " + str(event.connection.eth_addr))
+    log.info('Getting egress port for this packet on switch %d:' % switch_dpid)
+    log.info((packet.src, packet.dst))
+    log.info(packet.dump())
+    log.info(packet.effective_ethertype)
+
+    """
+
     egress_port = self.routing.get_egress_port(packet, switch_dpid)
     switch = self.switches.get(switch_dpid)
 
@@ -127,9 +179,7 @@ class JellyfishController (EventMixin):
         return
 
     # Send packet along
-    self.forward(packet, switch, egress_port)
-
-# TODO: how to get host information from the mininet topology.
+    self.forward(event.connection, packet, switch, egress_port)
 
 def launch (topo=None, routing=None):
   """
@@ -140,7 +190,7 @@ def launch (topo=None, routing=None):
           e.g.: 'jellyfish,4' 'dummy'
 
       - routing is a string indicating what routing mechanism to use:
-          e.g.: 'ecmp', 'kshort'
+          e.g.: 'ecmp8', 'kshort'
   """
   log.info("Launching controller")
   if not topo or not routing:
@@ -149,8 +199,10 @@ def launch (topo=None, routing=None):
   my_topology = build_topology(topo)
   my_routing = Routing(my_topology, routing, log)
   my_routing.generate_rtable()
-  log.info("Launching routing")
+  log.info(my_routing.routing_paths)
+  log.info(my_topology.links())
   core.registerNew(JellyfishController, my_topology, my_routing)
+
 
 # for debugging
 if __name__ == '__main__':

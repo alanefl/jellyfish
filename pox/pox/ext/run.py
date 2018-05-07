@@ -22,7 +22,7 @@ from time import sleep, time
 # These two map strings to class constructors for
 # controllers and topologies.
 from pox.ext.controllers import JellyfishController
-from topologies import topologies, dpid_to_ip_addr
+from topologies import topologies, dpid_to_ip_addr, dpid_to_mac_addr
 
 def test_ping(net):
     """
@@ -38,6 +38,7 @@ def test_ping(net):
     except KeyboardInterrupt:
         pass
     finally:
+        CLI(net)
         net.stop()
 
 def get_permutation_traffic_dict(hosts):
@@ -58,10 +59,20 @@ def get_permutation_traffic_dict(hosts):
 
 
 def update_server_throughputs(host_lines, host_throughput, rounds):
+    """
+    Parses the host output lines that we care about (the ones that contain)
+    their reported iperf throughput.
+
+    Adds the throughput values to the host_throughput dictionary, accumulating
+    throughput values across rounds.
+    """
     for h in host_lines:
         if h not in host_throughput:
             host_throughput[h] = 0
-        host_throughput[h] += float(host_lines[h].split()[-2]) / rounds
+        raw_val = float(host_lines[h].split()[-2]) / rounds
+        if host_lines[h].split()[-1].startswith("Mbits"):
+            raw_val /= 100
+        host_throughput[h] += raw_val
 
 def monitor_throughput(popens, P, rounds, host_throughput):
     """
@@ -75,7 +86,9 @@ def monitor_throughput(popens, P, rounds, host_throughput):
     for host, line in pmonitor(popens):
         if host:
 
-            # Catch the lines of output we care about
+            # Catch the lines of output we care about.  Namely
+            # the ones that contain the Bandwith readings of
+            # Mbits/sec or Gbits / sec
             if P == 1:
                 if 'Bytes' in line:
                     host_lines[host.name] = line.strip()
@@ -84,7 +97,7 @@ def monitor_throughput(popens, P, rounds, host_throughput):
                     host_lines[host.name] = line.strip()
             print("<%s>: %s" % (host.name, line.strip()))
 
-    # Update the per-server throughput values
+    # Update the per-server throughput values after each round.
     update_server_throughputs(host_lines, host_throughput, rounds)
 
 def rand_perm_traffic(net, P=1, rounds=5):
@@ -95,12 +108,23 @@ def rand_perm_traffic(net, P=1, rounds=5):
         P is the number of parallel flows to send from each host
         to another host.
     """
-    send_dict = get_permutation_traffic_dict(net.topo.hosts())
+    #send_dict = get_permutation_traffic_dict(net.topo.hosts())
+
+    # At the end of the loop below,
+    # will map [h] -> average throughput across rounds
     host_throughput = {}
 
     try:
         net.start()
+
+        # For a certain number of rounds, run iperf on random permutation
+        # pairs of hosts.
+        #
+        # TODO: should the randum permutation matrix be recalculated after every
+        #       round, or once before the 5 rounds?
+
         for i in range(rounds):
+            send_dict = get_permutation_traffic_dict(net.topo.hosts())
             print(" \n ROUND %d \n" % (i+1))
             popens = {}
             for h in send_dict:
@@ -109,25 +133,31 @@ def rand_perm_traffic(net, P=1, rounds=5):
                 from_host, to_host = net.getNodeByName(from_host_name, to_host_name)
                 from_ip = from_host.IP()
                 to_ip = to_host.IP()
-                #print("\n=== Sending from %s:%s to %s:%s" % (from_host_name, from_ip, to_host_name, to_ip))
 
-                # Set iperf server on target host
+                # Set iperf server on receiver
                 to_host.popen('iperf -s')
 
-                # Set an iperf client on client host
+                # Set an iperf client on sender
                 popens[from_host] = from_host.popen('iperf -c %s -P %s' % (to_ip, P))
 
-            # Get the output from the iperf commands.
+            # Get the output from the iperf commands, and update the
+            # host_throughput dictionary.
             monitor_throughput(popens, P, rounds, host_throughput)
 
     except KeyboardInterrupt:
         pass
     finally:
         net.stop()
+        print("\n ~~ Results ~~ ")
+        print("\n Individual host throughput averages, in Gbits/sec")
         print(host_throughput) # values in GBits/s
-        avg_throughput = float(sum(host_throughput.values())) / len(host_throughput.items())
+        avg_throughput = float(sum(host_throughput.values()))
+        if len(host_throughput.items()) == 0:
+            print("There weren't any throughput items!")
+        else:
+            avg_throughput /= len(host_throughput.items())
         # TODO: figure out actual nic rate
-        print('Average throughput: {}, Percentage of NIC rate: {}'.format(avg_throughput, avg_throughput/10.0))
+        print('Average server throughput: {}, Percentage of NIC rate: {}'.format(avg_throughput, avg_throughput/10.0))
 
 # Set up argument parser.
 
@@ -135,7 +165,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-display', action='store_true')
 parser.add_argument('-pingtest', action='store_true')
 parser.add_argument('-randpermtraffic', action='store_true')
-
+parser.add_argument('-cli', action='store_true')
 
 #TODO: we need to be able to give topology constructor arguments
 #      from the command line.
@@ -144,36 +174,104 @@ parser.add_argument('-t','--topology',
 parser.add_argument('-f','--flows',
     help='Number of flows to test with random permutation traffic')
 
+def print_switches(net, n_interfaces=3):
+    """
+    n_interfaces is the number of interfaces
+    available on the switch.
+    """
+    print(" --- Switches --- ")
+    for s in net.switches:
+        print("\n---------")
+        print(s.__repr__())
+        for i in range(n_interfaces):
+            print(s.MAC(intf="%s-eth%d" % (s, i+1)))
+        print(s.IP)
+        print(s.dpid)
+
+def print_hosts(net):
+    print(" --- Hosts --- ")
+    for h in net.hosts:
+        print("\n---------")
+        print(h.IP)
+        print(h.IP())
+        print(h.MAC())
+        print(h.config())
+
+def set_switch_eths_ips(net, n_interfaces=3):
+    """
+    Sets the ethernet address of interfaces and their
+    ip addresses as well.
+    on all switches according to some scheme we design.
+
+    The scheme is currently as follows:
+        MaC address for interface x: is x.<dpid converted to MAC>
+
+        IP address for interface x: is x.<dpid converted to IP>
+
+    n_interfaces is the number of interfaces on each switch.
+
+
+    NOTE: this function is not called, and I don't think it's useful.
+          But we can keep it here as an example.
+    """
+    for s in net.switches:
+        mac_ = dpid_to_mac_addr(int(s.dpid))
+        ip_ = dpid_to_ip_addr(int(s.dpid))
+        for i in range(n_interfaces):
+            # NOTE: set the interface verbatim as the left most elem
+            mac = "%02d" % (i + 1) + mac_[2:]
+            ip = str(i+1) + ip_[1:]
+           # for s_ in net.switches:
+            s.setMAC(mac=mac, intf="%s-eth%d" % (s, i + 1))
+            print("Setting " + "%s-eth%d" % (s, i + 1) + " to %s" % mac)
+            s.setIP(ip=ip, intf="%s-eth%d" % (s, i + 1))
+
+def set_host_arps(net):
+    """
+    Sets the ARP tables of the network hosts.
+
+    Every host hx must know the MAC address of host hy if it is to send
+    any traffic to it.
+    """
+    hosts = net.hosts
+    for h in hosts:
+        for h_ in hosts:
+            if h == h_: continue
+            h.setARP(h_.IP(), h_.MAC())
+            print("Set arp on host %s for IP %s to mac %s" % (str(h), h_.IP(), h_.MAC()))
+
+def print_topo_info(net):
+    print_hosts(net)
+    print_switches(net)
 
 if __name__ == '__main__':
 
     args = vars(parser.parse_args())
 
     # TODO (nice to have): propagate this to both, instead of hardcoding it
-    random_seed = None
+
+    random_seed = None # The random seed MUST be 0
     topo = topologies[args['topology']]()
 
     # Create Mininet network with a custom controller
-    net = Mininet(topo=topo, controller=JellyfishController)#, host=CPULimitedHost, link=TCLink) TODO: why do these arguments fail?
+    net = Mininet(topo=topo, controller=JellyfishController)
 
-    """
-    NOTE: to set the IPs of the switches you can do
-    for n in net.switches:
-        n.setIP(dpid_to_ip_addr(int(n.dpid)))
-    However, this currently causes a weird crash in core, such that
-    the line core.registerNew(JellyfishController, my_topology, my_routing)
-    in jellyfish_controller.py never seems to finish executing
-    """
+    # We need to tell each host the MAC address of every other host.
+    set_host_arps(net)
 
+    #print(net.links[0])
+    #print((net.links[0].intf1.MAC(), net.links[0].intf2.MAC()))
+
+    # What experiment to run?
     if args['pingtest']:
-        # Run ping all experiment
         test_ping(net)
     elif args['randpermtraffic']:
-        # Random permutation traffic test
         P = 1
         if 'flows' in args:
             P = int(args['flows'])
         rand_perm_traffic(net, P=P)
+    elif args['cli']:
+        CLI(net)
 
     # Display the topology
     if args['display']:

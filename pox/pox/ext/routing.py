@@ -16,6 +16,7 @@ class Routing():
         self.topo = topo
         self.log = log
 
+        self.log.info("Setting proto")
         self.set_path_fn(rproto)
 
         self.hostname_to_mac = {} # Maps hostnames to mac addresses.
@@ -125,8 +126,10 @@ class Routing():
     # find current switch in path, and find egress port to get
     # to next hop in the path
     def get_egress_port(self, packet, switch_dpid):
+
+        # This should actually never happen.
         if str(packet.dst) == 'ff:ff:ff:ff:ff:ff':
-            self.log.info('Broadcasting packet')
+            self.log.warn('Broadcasting packet..')
             return of.OFPP_FLOOD
 
         paths = self.routing_paths[str(packet.src)][str(packet.dst)]
@@ -136,7 +139,14 @@ class Routing():
         path = paths[index]
         """
         path = random.choice(paths)
+
         switch_id = dpid_to_switch(switch_dpid)
+
+        # NOTE: we must choose a path that contains the current
+        #       switch.
+        while switch_id not in path:
+            path = random.choice(paths)
+
         switch_index = path.index(switch_id)
         return self.port_map[switch_id][path[switch_index + 1]]
 
