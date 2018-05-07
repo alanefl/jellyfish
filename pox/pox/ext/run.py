@@ -22,7 +22,7 @@ from time import sleep, time
 # These two map strings to class constructors for
 # controllers and topologies.
 from pox.ext.controllers import JellyfishController
-from topologies import topologies, dpid_to_ip_addr
+from topologies import topologies, dpid_to_ip_addr, dpid_to_mac_addr
 
 def test_ping(net):
     """
@@ -38,6 +38,7 @@ def test_ping(net):
     except KeyboardInterrupt:
         pass
     finally:
+        CLI(net)
         net.stop()
 
 def get_permutation_traffic_dict(hosts):
@@ -135,7 +136,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-display', action='store_true')
 parser.add_argument('-pingtest', action='store_true')
 parser.add_argument('-randpermtraffic', action='store_true')
-
+parser.add_argument('-cli', action='store_true')
 
 #TODO: we need to be able to give topology constructor arguments
 #      from the command line.
@@ -144,6 +145,68 @@ parser.add_argument('-t','--topology',
 parser.add_argument('-f','--flows',
     help='Number of flows to test with random permutation traffic')
 
+def print_switches(net, n_interfaces=3):
+    """
+    n_interfaces is the number of interfaces
+    available on the switch.
+    """
+    print(" --- Switches --- ")
+    for s in net.switches:
+        print("\n---------")
+        print(s.__repr__())
+        for i in range(n_interfaces):
+            print(s.MAC(intf="%s-eth%d" % (s, i+1)))
+        print(s.IP)
+        print(s.dpid)
+
+def print_hosts(net):
+    print(" --- Hosts --- ")
+    for h in net.hosts:
+        print("\n---------")
+        print(h.IP)
+        print(h.IP())
+        print(h.MAC())
+        print(h.config())
+
+def set_switch_eths_ips(net, n_interfaces=3):
+    """
+    Sets the ethernet address of interfaces and their
+    ip addresses as well.
+    on all switches according to some scheme we design.
+
+    The scheme is currently as follows:
+        MaC address for interface x: is x.<dpid converted to MAC>
+
+        IP address for interface x: is x.<dpid converted to IP>
+
+    n_interfaces is the number of interfaces on each switch.
+    """
+    for s in net.switches:
+        mac_ = dpid_to_mac_addr(int(s.dpid))
+        ip_ = dpid_to_ip_addr(int(s.dpid))
+        for i in range(n_interfaces):
+            # NOTE: set the interface verbatim as the left most elem
+            mac = "%02d" % (i + 1) + mac_[2:]
+            ip = str(i+1) + ip_[1:]
+           # for s_ in net.switches:
+            s.setMAC(mac=mac, intf="%s-eth%d" % (s, i + 1))
+            print("Setting " + "%s-eth%d" % (s, i + 1) + " to %s" % mac)
+            s.setIP(ip=ip, intf="%s-eth%d" % (s, i + 1))
+
+def set_host_arps(net):
+    """
+    Sets the ARP tables of the network hosts.
+    """
+    hosts = net.hosts
+    for h in hosts:
+        for h_ in hosts:
+            if h == h_: continue
+            h.setARP(h_.IP(), h_.MAC())
+            print("Set arp on host %s for IP %s to mac %s" % (str(h), h_.IP(), h_.MAC()))
+
+def print_topo_info(net):
+    print_hosts(net)
+    print_switches(net)
 
 if __name__ == '__main__':
 
@@ -156,14 +219,11 @@ if __name__ == '__main__':
     # Create Mininet network with a custom controller
     net = Mininet(topo=topo, controller=JellyfishController)#, host=CPULimitedHost, link=TCLink) TODO: why do these arguments fail?
 
-    """
-    NOTE: to set the IPs of the switches you can do
-    for n in net.switches:
-        n.setIP(dpid_to_ip_addr(int(n.dpid)))
-    However, this currently causes a weird crash in core, such that
-    the line core.registerNew(JellyfishController, my_topology, my_routing)
-    in jellyfish_controller.py never seems to finish executing
-    """
+    # We need to tell each host the MAC address of every other host.
+    set_host_arps(net)
+
+    #print(net.links[0])
+    #print((net.links[0].intf1.MAC(), net.links[0].intf2.MAC()))
 
     if args['pingtest']:
         # Run ping all experiment
@@ -174,6 +234,8 @@ if __name__ == '__main__':
         if 'flows' in args:
             P = int(args['flows'])
         rand_perm_traffic(net, P=P)
+    elif args['cli']:
+        CLI(net)
 
     # Display the topology
     if args['display']:

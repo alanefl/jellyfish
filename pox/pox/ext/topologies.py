@@ -30,18 +30,21 @@ class JellyfishTopo(Topo):
         # add n switches, each attached to k hosts
         # The number x in (s|h)x must be globally unique
         # across the topology.
+        #
+        # We assign a pid incrementally to every switch or host that comes up.
+        pid_ctr = 1
         for i in range(1,n+1): # so that i is not 0
-            sdpid = 2*i
             """
             NOTE: setting the IP of the switch here doesn't seem to do anything,
                   though the IP of the host is set.
             """
-            s = self.addSwitch('s{}'.format(sdpid), ip=dpid_to_ip_addr(sdpid))
+            s = self.addSwitch('s{}'.format(pid_ctr))
+            pid_ctr += 1
             for j in range(k-r):
-                hdpid = 2*i + 1
-                h = self.addHost('h{}'.format(hdpid), mac=dpid_to_mac_addr(hdpid),
-                    ip=dpid_to_ip_addr(hdpid))
+                h = self.addHost('h{}'.format(pid_ctr), mac=dpid_to_mac_addr(pid_ctr),
+                    ip=dpid_to_ip_addr(pid_ctr))
                 self.addLink(h, s)
+                pid_ctr += 1
             # Note: to actually add the ports to the switch, we could use
             #       map(s.attach, range(NUM_PORTS))
             #       however, switch numbers don't matter, only the number of
@@ -153,8 +156,12 @@ def dpid_to_mac_addr(dpid):
     return ':'.join(s.encode('hex') for s in interm.decode('hex'))
 
 def dpid_to_ip_addr(dpid):
+    """
+    Returns 10.0.0.<dpid>
+    """
     import socket, struct
-    return socket.inet_ntoa(struct.pack('!L', dpid))
+    addr = socket.inet_ntoa(struct.pack('!L', dpid))
+    return "10" + addr[1:]
 
 def node_name_to_dpid(host_name):
     return int(host_name[1:])

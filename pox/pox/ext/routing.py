@@ -137,7 +137,14 @@ class Routing():
         path = paths[index]
         """
         path = random.choice(paths)
+
         switch_id = dpid_to_switch(switch_dpid)
+
+        # NOTE: we must choose a path that contains the current
+        #       switch.
+        while switch_id not in path:
+            path = random.choice(paths)
+
         switch_index = path.index(switch_id)
         return self.port_map[switch_id][path[switch_index + 1]]
 

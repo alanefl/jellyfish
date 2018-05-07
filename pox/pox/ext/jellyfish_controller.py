@@ -71,6 +71,8 @@ class JellyfishController (EventMixin):
     and registers it in the controller.
     """
     log.info('Connection up')
+    log.info(event.connection.features)
+    log.info(event.ofp)
     switch_dpid = event.dpid
     switch = self.switches.get(event.dpid)
 
@@ -99,6 +101,10 @@ class JellyfishController (EventMixin):
     if len(self.switches) == len(self.topology.switches()):
       log.info(" Woo!  All switches up")
 
+
+  def _handle_ConnectionDown (self, event):
+    self.switches.get(event.dpid).disconnect()
+
   def _handle_PacketIn (self, event):
     """
     Handles packet in messages for all switches.
@@ -110,14 +116,33 @@ class JellyfishController (EventMixin):
     # What switch are we talking about here?
     switch_dpid = event.dpid
 
+
     # Get packet data
     packet = event.parsed
     if not packet.parsed:
       log.warning("Ignoring incomplete packet.")
       return
 
+    if str(packet.dst) == "ff:ff:ff:ff:ff:ff":
+      # We should not be dealing with any broadcast packets.
+      # These are usually DHCP, we can ignore since we have knowledge
+      # of all topology addressing.
+      return
+
     # What port should we send this packet out from?
-    log.info('Getting egress port')
+
+    # Uncomment stuff below to dump lots of info about the packet we
+    # just received
+
+    """
+    log.info("Event raised on eth address:  " + str(event.connection.eth_addr))
+    log.info('Getting egress port for this packet on switch %d:' % switch_dpid)
+    log.info((packet.src, packet.dst))
+    log.info(packet.dump())
+    log.info(packet.effective_ethertype)
+
+    """
+
     egress_port = self.routing.get_egress_port(packet, switch_dpid)
     switch = self.switches.get(switch_dpid)
 
@@ -127,8 +152,6 @@ class JellyfishController (EventMixin):
 
     # Send packet along
     self.forward(packet, switch, egress_port)
-
-# TODO: how to get host information from the mininet topology.
 
 def launch (topo=None, routing=None):
   """
@@ -148,9 +171,9 @@ def launch (topo=None, routing=None):
   my_topology = build_topology(topo)
   my_routing = Routing(my_topology, routing, log)
   my_routing.generate_rtable()
-  log.info("Launching routing")
+  log.info(my_routing.routing_paths)
+  log.info(my_topology.links())
   core.registerNew(JellyfishController, my_topology, my_routing)
-  log.info("Registered Jellyfish controller and routing")
 
 
 # for debugging
