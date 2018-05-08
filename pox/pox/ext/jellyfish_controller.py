@@ -25,6 +25,7 @@ from pox.lib.revent import EventMixin
 import pox.openflow.libopenflow_01 as of
 from routing import Routing
 from switch import Switch
+from pox.lib.packet import ipv4, tcp, udp
 
 class FakeLogger():
   def info(self, txt):
@@ -68,21 +69,32 @@ class JellyfishController (EventMixin):
     requests for an egress port.
     """
 
-    if (switch, packet.dst) in self.switch_dst_eth_seen:
+   # if (switch, packet.dst) in self.switch_dst_eth_seen:
       # This should not happen
-      log.warn("Saw packet heading to to the same place on same switch again :(")
+    #  log.warn("Saw packet heading to to the same place on same switch again :(")
 
     log.info("Sending packet out of port %d from switch %d" % (egress_port, switch.dpid))
 
-    # 1) Tell the switch to always send these packets with this
-    #    destination MAC address from this port
+    # 1) Tell the switch to always send these packets with these
+    #    hash properties from this port
 
     msg = of.ofp_flow_mod()
     msg.match.dl_dst = packet.dst
+    msg.match.dl_src = packet.src
+    msg.match.dl_type = packet.type
+    if isinstance(packet.next, ipv4):
+      ip = packet.next
+      msg.match.nw_proto = ip.protocol
+      msg.match.nw_dst = ip.dstip.toUnsigned()
+      msg.match.nw_src = ip.srcip.toUnsigned()
+      if isinstance(ip.next, tcp) or isinstance(ip.next, udp):
+        l4 = ip.next
+        msg.match.tp_src = l4.srcport
+        msg.match.tp_dst = l4.dstport
     msg.actions.append(of.ofp_action_output(port = egress_port))
     connection.send(msg)
 
-    self.switch_dst_eth_seen.append((switch, packet.dst))
+    #self.switch_dst_eth_seen.append((switch, packet.dst))
 
     # 2) But send we have to send this packet out ourselves..
     switch.send_packet_data(egress_port, packet)
@@ -117,8 +129,7 @@ class JellyfishController (EventMixin):
       self.routing.register_switch(switch)
 
     else:
-      log.warn("Odd - already saw switch %s come up" % sw_str)
-      exit(0)
+      log.warn("Odd - already saw switch %s come up" % switch_name_str)
 
     if len(self.switches) == len(self.topology.switches()):
       log.info(" Woo!  All switches up")

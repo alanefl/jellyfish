@@ -53,6 +53,12 @@ def get_permutation_traffic_dict(hosts):
     send_dict = {}
     for h in hosts:
         send_idx = random.choice(range(len(hosts_)))
+
+        # We should not send to ourselves.
+        # I THINK this will always terminate.
+        while hosts_[send_idx] == h:
+            send_idx = random.choice(range(len(hosts_)))
+
         send_dict[h] = hosts_[send_idx]
         del hosts_[send_idx]
     return send_dict
@@ -70,8 +76,10 @@ def update_server_throughputs(host_lines, host_throughput, rounds):
         if h not in host_throughput:
             host_throughput[h] = 0
         raw_val = float(host_lines[h].split()[-2]) / rounds
-        if host_lines[h].split()[-1].startswith("Mbits"):
-            raw_val /= 100
+        if host_lines[h].split()[-1].startswith("Gbits"):
+            raw_val *= 1000
+        elif host_lines[h].split()[-1].startswith("Kbits"):
+            raw_val /= 1000
         host_throughput[h] += raw_val
 
 def monitor_throughput(popens, P, rounds, host_throughput):
@@ -100,7 +108,11 @@ def monitor_throughput(popens, P, rounds, host_throughput):
     # Update the per-server throughput values after each round.
     update_server_throughputs(host_lines, host_throughput, rounds)
 
-def rand_perm_traffic(net, P=1, rounds=5):
+
+NIC_RATE = 10
+# Mb/s, which we set
+
+def rand_perm_traffic(net, P=1, rounds=3):
     """
     Tests the topology using random permutation traffic,
     as descibed in the Jellyfish paper.
@@ -142,22 +154,30 @@ def rand_perm_traffic(net, P=1, rounds=5):
 
             # Get the output from the iperf commands, and update the
             # host_throughput dictionary.
+            print(" \n Throughput watch... ")
             monitor_throughput(popens, P, rounds, host_throughput)
+            print(" \n End throughput watch... ")
 
     except KeyboardInterrupt:
         pass
     finally:
         net.stop()
         print("\n ~~ Results ~~ ")
-        print("\n Individual host throughput averages, in Gbits/sec")
-        print(host_throughput) # values in GBits/s
+        print("\n Individual host throughput averages, in Mbits/sec")
+        print(host_throughput) # values in MBits/s
         avg_throughput = float(sum(host_throughput.values()))
         if len(host_throughput.items()) == 0:
             print("There weren't any throughput items!")
         else:
             avg_throughput /= len(host_throughput.items())
-        # TODO: figure out actual nic rate
-        print('Average server throughput: {}, Percentage of NIC rate: {}'.format(avg_throughput, avg_throughput/10.0))
+            if len(host_throughput.items()) != len(net.hosts):
+                print("ERROR: incorrect number of host readings: %d/%d"
+                    % (len(host_throughput.items()), len(net.hosts)))
+
+        # NOTE: we are setting the NIC rate by specifying the bandwidth
+        #       field of each TCLink object.
+        print('Average server throughput: {}'.format(avg_throughput))
+        print('Percentage of NIC rate: {:.1%}%'.format(avg_throughput/NIC_RATE))
 
 # Set up argument parser.
 
@@ -253,11 +273,25 @@ if __name__ == '__main__':
     random_seed = None # The random seed MUST be 0
     topo = topologies[args['topology']]()
 
+    #for l in topo.links():
+    #    print(dir(l))
+    #exit(0)
+        # Display the topology
+
     # Create Mininet network with a custom controller
-    net = Mininet(topo=topo, controller=JellyfishController)
+    net = Mininet(topo=topo, controller=JellyfishController, link=TCLink)
 
     # We need to tell each host the MAC address of every other host.
     set_host_arps(net)
+
+    # Display the topology
+    if args['display']:
+        print("\n\n==== Displaying topology ...")
+        g = nx.Graph()
+        g.add_nodes_from(topo.nodes())
+        g.add_edges_from(topo.links())
+        nx.draw(g, with_labels=True)
+        plt.show()
 
     #print(net.links[0])
     #print((net.links[0].intf1.MAC(), net.links[0].intf2.MAC()))
@@ -273,11 +307,3 @@ if __name__ == '__main__':
     elif args['cli']:
         CLI(net)
 
-    # Display the topology
-    if args['display']:
-        print("\n\n==== Displaying topology ...")
-        g = nx.Graph()
-        g.add_nodes_from(topo.nodes())
-        g.add_edges_from(topo.links())
-        nx.draw(g, with_labels=True)
-        plt.show()
