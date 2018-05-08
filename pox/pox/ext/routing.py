@@ -5,6 +5,9 @@ from functools import partial
 import networkx as nx
 import itertools
 import random
+from pox.lib.packet import ipv4, tcp, udp
+from struct import pack
+from zlib import crc32
 
 from topologies import dpid_to_mac_addr, node_name_to_dpid, dpid_to_switch
 import pox.openflow.libopenflow_01 as of
@@ -50,6 +53,7 @@ class Routing():
     # Creates path map:
     # host src eth -> (host src eth -> [possible paths])
     def generate_routing_paths(self):
+        self.log.info('generating paths')
         self.routing_paths = defaultdict(lambda: dict())
 
         # create map from node name -> (node name -> egress port)
@@ -59,16 +63,23 @@ class Routing():
             self.port_map[l[0]][l[1]] = l[2]['port1']
             self.port_map[l[1]][l[0]] = l[2]['port2']
 
+        self.log.info('port map made')
+
         hosts = self.topo.hosts()
         g = nx.Graph()
         g.add_nodes_from(self.topo.nodes())
         g.add_edges_from(self.topo.links())
 
+        self.log.info('graph created')
+
         # find paths from each host to each host
         # note: we do not know how to route to other switches, only other hosts
         for src in hosts:
+            self.log.info('host doing')
             for dst in filter(lambda h: h != src, hosts):
+                self.log.info('getting paths')
                 paths = self.path_fn(g, src, dst)
+                self.log.info('have paths')
                 # convert paths to egress ports
                 src_mac = self.hostname_to_mac[src]
                 dst_mac = self.hostname_to_mac[dst]
@@ -119,6 +130,8 @@ class Routing():
             hash_input[3] = l4.srcport
             hash_input[4] = l4.dstport
             return crc32(pack('LLHHH', *hash_input))
+          else: self.log.warn('not tcp/udp')
+        else: self.log.warn('not ipv4')
         return 0
 
     # get paths between src and dst mac address of packet
@@ -133,21 +146,12 @@ class Routing():
             return of.OFPP_FLOOD
 
         paths = self.routing_paths[str(packet.src)][str(packet.dst)]
-        """
-        TODO: get proper ECMP hashing working
-        index = len(paths) % self._ecmp_hash(packet)
+        index = self._ecmp_hash(packet) % len(paths)
+        self.log.info('index = {}, switch dpid = {}, path = {}'.format(index, switch_dpid, paths[index]))
         path = paths[index]
-        """
-        path = random.choice(paths)
-
         switch_id = dpid_to_switch(switch_dpid)
-
-        # NOTE: we must choose a path that contains the current
-        #       switch.
-        while switch_id not in path:
-            path = random.choice(paths)
-
         switch_index = path.index(switch_id)
+
         return self.port_map[switch_id][path[switch_index + 1]]
 
     def register_switch(self, switch):

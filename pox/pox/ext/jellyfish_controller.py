@@ -25,6 +25,7 @@ from pox.lib.revent import EventMixin
 import pox.openflow.libopenflow_01 as of
 from routing import Routing
 from switch import Switch
+from pox.lib.packet import ipv4, tcp, udp
 
 class FakeLogger():
   def info(self, txt):
@@ -74,11 +75,22 @@ class JellyfishController (EventMixin):
 
     log.info("Sending packet out of port %d from switch %d" % (egress_port, switch.dpid))
 
-    # 1) Tell the switch to always send these packets with this
-    #    destination MAC address from this port
+    # 1) Tell the switch to always send these packets with the
+    #   hash properties from this port
 
     msg = of.ofp_flow_mod()
     msg.match.dl_dst = packet.dst
+    msg.match.dl_src = packet.src
+    msg.match.dl_type = packet.type
+    if isinstance(packet.next, ipv4):
+      ip = packet.next
+      msg.match.nw_proto = ip.protocol
+      msg.match.nw_dst = ip.dstip.toUnsigned()
+      msg.match.nw_src = ip.srcip.toUnsigned()
+      if isinstance(ip.next, tcp) or isinstance(ip.next, udp):
+        l4 = ip.next
+        msg.match.tp_src = l4.srcport
+        msg.match.tp_dst = l4.dstport
     msg.actions.append(of.ofp_action_output(port = egress_port))
     connection.send(msg)
 
@@ -93,8 +105,6 @@ class JellyfishController (EventMixin):
     and registers it in the controller.
     """
     log.info('Connection up')
-    log.info(event.connection.features)
-    log.info(event.ofp)
     switch_dpid = event.dpid
     switch = self.switches.get(event.dpid)
 
@@ -197,11 +207,18 @@ def launch (topo=None, routing=None):
     raise Exception("Topology and Routing mechanism must be specified.")
 
   my_topology = build_topology(topo)
+  log.info('Topology built')
   my_routing = Routing(my_topology, routing, log)
-  my_routing.generate_rtable()
-  log.info(my_routing.routing_paths)
-  log.info(my_topology.links())
+  log.info('Routing created')
+  try:
+    my_routing.generate_rtable()
+  except e:
+    import traceback
+    tb = traceback.format_exc()
+    log.warn(tb)
+  log.info('Rtable generated')
   core.registerNew(JellyfishController, my_topology, my_routing)
+  log.info('Core registered')
 
 
 # for debugging

@@ -70,8 +70,8 @@ def update_server_throughputs(host_lines, host_throughput, rounds):
         if h not in host_throughput:
             host_throughput[h] = 0
         raw_val = float(host_lines[h].split()[-2]) / rounds
-        if host_lines[h].split()[-1].startswith("Mbits"):
-            raw_val /= 100
+        if host_lines[h].split()[-1].startswith("Gbits"):
+            raw_val *= 100
         host_throughput[h] += raw_val
 
 def monitor_throughput(popens, P, rounds, host_throughput):
@@ -254,7 +254,7 @@ if __name__ == '__main__':
     topo = topologies[args['topology']]()
 
     # Create Mininet network with a custom controller
-    net = Mininet(topo=topo, controller=JellyfishController)
+    net = Mininet(topo=topo, controller=JellyfishController, link=TCLink)
 
     # We need to tell each host the MAC address of every other host.
     set_host_arps(net)

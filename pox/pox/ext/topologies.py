@@ -8,6 +8,7 @@ Keep all topology definitions for PA2 in this file.
 """
 
 NUM_PORTS = 3
+BW = 50
 
 class JellyfishTopo(Topo):
     """
@@ -15,7 +16,7 @@ class JellyfishTopo(Topo):
     r of which are connected to other switches.
     They are connected to each other using the jellyfish algorithm
     """
-    def build(self, random_seed=0, n=4, k=NUM_PORTS, r=None):
+    def build(self, random_seed=0, n=16, k=4, r=None):
         if r is None: r = k-1
 
         # For reproducing the topology in the controller and in the
@@ -43,7 +44,7 @@ class JellyfishTopo(Topo):
             for j in range(k-r):
                 h = self.addHost('h{}'.format(pid_ctr), mac=dpid_to_mac_addr(pid_ctr),
                     ip=dpid_to_ip_addr(pid_ctr))
-                self.addLink(h, s)
+                self.addLink(h, s, bw=BW)
                 pid_ctr += 1
             # Note: to actually add the ports to the switch, we could use
             #       map(s.attach, range(NUM_PORTS))
@@ -56,7 +57,7 @@ class JellyfishTopo(Topo):
         self.make_jellyfish_topo()
 
         # since there is not actual removeLink method, only add links at the end
-        for l in self.temp_links: self.addLink(*l)
+        for l in self.temp_links: self.addLink(*l, bw=BW)
 
     def make_jellyfish_topo(self):
         # while possible, join two random switches with free ports
