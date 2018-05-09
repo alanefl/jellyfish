@@ -15,7 +15,7 @@ import pox.openflow.libopenflow_01 as of
 import yens
 
 class Routing():
-    def __init__(self, topo, rproto, log):
+    def __init__(self, topo, rproto, log, seed=0):
         self.topo = topo
         self.log = log
 
@@ -27,7 +27,7 @@ class Routing():
             self.hostname_to_mac[host] = dpid_to_mac_addr(node_name_to_dpid(host))
         self.log.info(self.hostname_to_mac)
 
-        random.seed(0)
+        random.seed(seed)
 
     def set_path_fn(self, rproto):
         self.path_fn = None

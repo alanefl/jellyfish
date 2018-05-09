@@ -19,9 +19,6 @@ class JellyfishTopo(Topo):
     def build(self, random_seed=0, n=15, k=NUM_PORTS, r=None):
         if r is None: r = k-1
 
-       # n = 8
-        # k = 6
-        # r = 4
 
         # For reproducing the topology in the controller and in the
         # Mininet instance.

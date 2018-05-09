@@ -112,7 +112,7 @@ def monitor_throughput(popens, P, rounds, host_throughput):
 NIC_RATE = 10
 # Mb/s, which we set
 
-def rand_perm_traffic(net, P=1, rounds=3):
+def rand_perm_traffic(net, P=1, rounds=5):
     """
     Tests the topology using random permutation traffic,
     as descibed in the Jellyfish paper.
@@ -178,21 +178,6 @@ def rand_perm_traffic(net, P=1, rounds=3):
         #       field of each TCLink object.
         print('Average server throughput: {}'.format(avg_throughput))
         print('Percentage of NIC rate: {:.1%}%'.format(avg_throughput/NIC_RATE))
-
-# Set up argument parser.
-
-parser = argparse.ArgumentParser()
-parser.add_argument('-display', action='store_true')
-parser.add_argument('-pingtest', action='store_true')
-parser.add_argument('-randpermtraffic', action='store_true')
-parser.add_argument('-cli', action='store_true')
-
-#TODO: we need to be able to give topology constructor arguments
-#      from the command line.
-parser.add_argument('-t','--topology',
-    help='What topology from pox.ext.topologies to use', required=True)
-parser.add_argument('-f','--flows',
-    help='Number of flows to test with random permutation traffic')
 
 def print_switches(net, n_interfaces=3):
     """
@@ -264,19 +249,58 @@ def print_topo_info(net):
     print_hosts(net)
     print_switches(net)
 
+# Set up argument parser.
+parser = argparse.ArgumentParser()
+parser.add_argument('-display', action='store_true')
+parser.add_argument('-pingtest', action='store_true')
+parser.add_argument('-randpermtraffic', action='store_true')
+parser.add_argument('-cli', action='store_true')
+parser.add_argument('-t','--topology',
+    help='What topology from pox.ext.topologies to use with arguments', required=True)
+parser.add_argument('-f','--flows',
+    help='Number of flows to test with random permutation traffic')
+parser.add_argument('-r','--routing',
+    help='One of ecmp, kshort.  What routing algorithm to use', required=True)
+parser.add_argument('-s','--seed',
+    help='What random seed to use for this experiment.', required=True)
+
 if __name__ == '__main__':
 
     args = vars(parser.parse_args())
 
-    # TODO (nice to have): propagate this to both, instead of hardcoding it
+    # We only support Jellyfish topologies.
+    if not args['topology'].startswith("jelly"):
+        print("We only support the 'Jelly' topology.")
+        raise SystemExit
 
-    random_seed = None # The random seed MUST be 0
-    topo = topologies[args['topology']]()
+    topology_args = args['topology'].split(',')
+    topo_name = topology_args[0]
+    n = int(topology_args[1])
+    k = int(topology_args[2])
+    r = int(topology_args[3])
 
-    #for l in topo.links():
-    #    print(dir(l))
-    #exit(0)
-        # Display the topology
+    seed = int(args['seed'])
+    random.seed(seed)
+
+    routing = args['routing']
+    if routing not in ['ecmp', 'kshort']:
+        print("We only know ECMP and KSHORT routing")
+        raise SystemExit
+
+
+    topo = topologies[topo_name](random_seed=seed,
+        n=n,
+        k=k,
+        r=r)
+
+    # Persist to file so controller can read this info.
+    with open('__jellyconfig', 'w', os.O_NONBLOCK) as config_file:
+        config_file.write('n=%d\n' % n)
+        config_file.write('k=%d\n' % k)
+        config_file.write('r=%d\n' % r)
+        config_file.write('seed=%d\n' % seed)
+        config_file.write('routing=%s\n' % routing)
+        config_file.flush()
 
     # Create Mininet network with a custom controller
     net = Mininet(topo=topo, controller=JellyfishController, link=TCLink)
