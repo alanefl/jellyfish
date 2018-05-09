@@ -13,6 +13,6 @@ experiment_order = ['TCP 1 Flow  w/   8ECMP',
                     'TCP 1 Flow  w/ 8KSHORT',
                     'TCP 8 Flows w/ 8KSHORT']
 
-print("\n\n ~~ Final Results: Table 1 ~~")
+print("\n\n ~~ Final Results: Table 1 ~~\n")
 for idx, p in enumerate(percentages):
-  print("\t%s --> %s" % (experiment_order[idx], p))
+  print("    %s --> %s" % (experiment_order[idx], p))
