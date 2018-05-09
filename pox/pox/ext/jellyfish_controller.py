@@ -212,7 +212,7 @@ def launch ():
   # Read out configuration from file.
 
   # NOTE: assumes jellyfish has been installed in the home directory.
-  config_loc = os.environ['HOME'] + '/jellyfish/pox/pox/ext/__jellyconfig'
+  config_loc = 'pox/ext/__jellyconfig'
   with open(config_loc, 'r', os.O_NONBLOCK) as config_file:
     log.info("inside")
     n = int(config_file.readline().split('=')[1])
