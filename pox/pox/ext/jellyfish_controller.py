@@ -17,6 +17,7 @@ JellyfishController class.
 """
 
 import sys
+import os
 sys.path.append("../../")
 from pox.core import core
 from pox.lib.util import dpidToStr
@@ -25,6 +26,8 @@ from pox.lib.revent import EventMixin
 import pox.openflow.libopenflow_01 as of
 from routing import Routing
 from switch import Switch
+from pox.lib.packet import ipv4, tcp, udp
+from topologies import topologies
 
 class FakeLogger():
   def info(self, txt):
@@ -68,21 +71,32 @@ class JellyfishController (EventMixin):
     requests for an egress port.
     """
 
-    if (switch, packet.dst) in self.switch_dst_eth_seen:
+   # if (switch, packet.dst) in self.switch_dst_eth_seen:
       # This should not happen
-      log.warn("Saw packet heading to to the same place on same switch again :(")
+    #  log.warn("Saw packet heading to to the same place on same switch again :(")
 
     log.info("Sending packet out of port %d from switch %d" % (egress_port, switch.dpid))
 
-    # 1) Tell the switch to always send these packets with this
-    #    destination MAC address from this port
+    # 1) Tell the switch to always send these packets with these
+    #    hash properties from this port
 
     msg = of.ofp_flow_mod()
     msg.match.dl_dst = packet.dst
+    msg.match.dl_src = packet.src
+    msg.match.dl_type = packet.type
+    if isinstance(packet.next, ipv4):
+      ip = packet.next
+      msg.match.nw_proto = ip.protocol
+      msg.match.nw_dst = ip.dstip.toUnsigned()
+      msg.match.nw_src = ip.srcip.toUnsigned()
+      if isinstance(ip.next, tcp) or isinstance(ip.next, udp):
+        l4 = ip.next
+        msg.match.tp_src = l4.srcport
+        msg.match.tp_dst = l4.dstport
     msg.actions.append(of.ofp_action_output(port = egress_port))
     connection.send(msg)
 
-    self.switch_dst_eth_seen.append((switch, packet.dst))
+    #self.switch_dst_eth_seen.append((switch, packet.dst))
 
     # 2) But send we have to send this packet out ourselves..
     switch.send_packet_data(egress_port, packet)
@@ -117,8 +131,7 @@ class JellyfishController (EventMixin):
       self.routing.register_switch(switch)
 
     else:
-      log.warn("Odd - already saw switch %s come up" % sw_str)
-      exit(0)
+      log.warn("Odd - already saw switch %s come up" % switch_name_str)
 
     if len(self.switches) == len(self.topology.switches()):
       log.info(" Woo!  All switches up")
@@ -181,27 +194,37 @@ class JellyfishController (EventMixin):
     # Send packet along
     self.forward(event.connection, packet, switch, egress_port)
 
-def launch (topo=None, routing=None):
+def launch ():
   """
   Starts the Controller:
 
       - topo is a string with comma-separated arguments specifying what
         topology to build.
-          e.g.: 'jellyfish,4' 'dummy'
+          e.g.: 'jellyfish,4'
 
       - routing is a string indicating what routing mechanism to use:
           e.g.: 'ecmp8', 'kshort'
   """
-  log.info("Launching controller")
-  if not topo or not routing:
-    raise Exception("Topology and Routing mechanism must be specified.")
 
-  my_topology = build_topology(topo)
-  my_routing = Routing(my_topology, routing, log)
+  # NOTE: currently only support jellyfish topology.
+
+  log.info("Launching Jellyfish controller")
+  # Read out configuration from file.
+
+  # NOTE: assumes jellyfish has been installed in the home directory.
+  config_loc = 'pox/ext/__jellyconfig'
+  with open(config_loc, 'r', os.O_NONBLOCK) as config_file:
+    log.info("inside")
+    n = int(config_file.readline().split('=')[1])
+    k = int(config_file.readline().split('=')[1])
+    r = int(config_file.readline().split('=')[1])
+    seed = int(config_file.readline().split('=')[1])
+    routing = config_file.readline().split('=')[1].strip()
+
+  jelly_topology = topologies["jelly"](random_seed=seed, n=n, k=k, r=r)
+  my_routing = Routing(jelly_topology, routing, log, seed=seed)
   my_routing.generate_rtable()
-  log.info(my_routing.routing_paths)
-  log.info(my_topology.links())
-  core.registerNew(JellyfishController, my_topology, my_routing)
+  core.registerNew(JellyfishController, jelly_topology, my_routing)
 
 
 # for debugging

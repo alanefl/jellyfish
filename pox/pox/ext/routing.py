@@ -5,6 +5,9 @@ from functools import partial
 import networkx as nx
 import itertools
 import random
+from pox.lib.packet import ipv4, tcp, udp
+from struct import pack
+from zlib import crc32
 
 from topologies import dpid_to_mac_addr, node_name_to_dpid, dpid_to_switch
 import pox.openflow.libopenflow_01 as of
@@ -12,7 +15,7 @@ import pox.openflow.libopenflow_01 as of
 import yens
 
 class Routing():
-    def __init__(self, topo, rproto, log):
+    def __init__(self, topo, rproto, log, seed=0):
         self.topo = topo
         self.log = log
 
@@ -23,6 +26,8 @@ class Routing():
         for host in topo.hosts():
             self.hostname_to_mac[host] = dpid_to_mac_addr(node_name_to_dpid(host))
         self.log.info(self.hostname_to_mac)
+
+        random.seed(seed)
 
     def set_path_fn(self, rproto):
         self.path_fn = None
@@ -133,20 +138,11 @@ class Routing():
             return of.OFPP_FLOOD
 
         paths = self.routing_paths[str(packet.src)][str(packet.dst)]
-        """
-        TODO: get proper ECMP hashing working
-        index = len(paths) % self._ecmp_hash(packet)
+
+        # ECMP hash.
+        index = self._ecmp_hash(packet) % len(paths)
         path = paths[index]
-        """
-        path = random.choice(paths)
-
         switch_id = dpid_to_switch(switch_dpid)
-
-        # NOTE: we must choose a path that contains the current
-        #       switch.
-        while switch_id not in path:
-            path = random.choice(paths)
-
         switch_index = path.index(switch_id)
         return self.port_map[switch_id][path[switch_index + 1]]
 

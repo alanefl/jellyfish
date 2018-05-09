@@ -53,6 +53,12 @@ def get_permutation_traffic_dict(hosts):
     send_dict = {}
     for h in hosts:
         send_idx = random.choice(range(len(hosts_)))
+
+        # We should not send to ourselves.
+        # I THINK this will always terminate.
+        while hosts_[send_idx] == h:
+            send_idx = random.choice(range(len(hosts_)))
+
         send_dict[h] = hosts_[send_idx]
         del hosts_[send_idx]
     return send_dict
@@ -70,8 +76,10 @@ def update_server_throughputs(host_lines, host_throughput, rounds):
         if h not in host_throughput:
             host_throughput[h] = 0
         raw_val = float(host_lines[h].split()[-2]) / rounds
-        if host_lines[h].split()[-1].startswith("Mbits"):
-            raw_val /= 100
+        if host_lines[h].split()[-1].startswith("Gbits"):
+            raw_val *= 1000
+        elif host_lines[h].split()[-1].startswith("Kbits"):
+            raw_val /= 1000
         host_throughput[h] += raw_val
 
 def monitor_throughput(popens, P, rounds, host_throughput):
@@ -95,10 +103,14 @@ def monitor_throughput(popens, P, rounds, host_throughput):
             else:
                 if '[SUM]' in line:
                     host_lines[host.name] = line.strip()
-            print("<%s>: %s" % (host.name, line.strip()))
+            #print("<%s>: %s" % (host.name, line.strip()))
 
     # Update the per-server throughput values after each round.
     update_server_throughputs(host_lines, host_throughput, rounds)
+
+
+NIC_RATE = 10
+# Mb/s, which we set
 
 def rand_perm_traffic(net, P=1, rounds=5):
     """
@@ -142,37 +154,30 @@ def rand_perm_traffic(net, P=1, rounds=5):
 
             # Get the output from the iperf commands, and update the
             # host_throughput dictionary.
+            print(" \n Throughput watch... ")
             monitor_throughput(popens, P, rounds, host_throughput)
+            print(" \n End throughput watch... ")
 
     except KeyboardInterrupt:
         pass
     finally:
         net.stop()
         print("\n ~~ Results ~~ ")
-        print("\n Individual host throughput averages, in Gbits/sec")
-        print(host_throughput) # values in GBits/s
+        print("\n Individual host throughput averages, in Mbits/sec")
+        print(host_throughput) # values in MBits/s
         avg_throughput = float(sum(host_throughput.values()))
         if len(host_throughput.items()) == 0:
             print("There weren't any throughput items!")
         else:
             avg_throughput /= len(host_throughput.items())
-        # TODO: figure out actual nic rate
-        print('Average server throughput: {}, Percentage of NIC rate: {}'.format(avg_throughput, avg_throughput/10.0))
+            if len(host_throughput.items()) != len(net.hosts):
+                print("ERROR: incorrect number of host readings: %d/%d"
+                    % (len(host_throughput.items()), len(net.hosts)))
 
-# Set up argument parser.
-
-parser = argparse.ArgumentParser()
-parser.add_argument('-display', action='store_true')
-parser.add_argument('-pingtest', action='store_true')
-parser.add_argument('-randpermtraffic', action='store_true')
-parser.add_argument('-cli', action='store_true')
-
-#TODO: we need to be able to give topology constructor arguments
-#      from the command line.
-parser.add_argument('-t','--topology',
-    help='What topology from pox.ext.topologies to use', required=True)
-parser.add_argument('-f','--flows',
-    help='Number of flows to test with random permutation traffic')
+        # NOTE: we are setting the NIC rate by specifying the bandwidth
+        #       field of each TCLink object.
+        print('Average server throughput: {}'.format(avg_throughput))
+        print('Percentage of NIC rate: {:.1%}'.format(avg_throughput/NIC_RATE))
 
 def print_switches(net, n_interfaces=3):
     """
@@ -244,20 +249,73 @@ def print_topo_info(net):
     print_hosts(net)
     print_switches(net)
 
+# Set up argument parser.
+parser = argparse.ArgumentParser()
+parser.add_argument('-display', action='store_true')
+parser.add_argument('-pingtest', action='store_true')
+parser.add_argument('-randpermtraffic', action='store_true')
+parser.add_argument('-cli', action='store_true')
+parser.add_argument('-t','--topology',
+    help='What topology from pox.ext.topologies to use with arguments', required=True)
+parser.add_argument('-f','--flows',
+    help='Number of flows to test with random permutation traffic')
+parser.add_argument('-r','--routing',
+    help='One of ecmp, kshort.  What routing algorithm to use', required=True)
+parser.add_argument('-s','--seed',
+    help='What random seed to use for this experiment.', required=True)
+
 if __name__ == '__main__':
 
     args = vars(parser.parse_args())
 
-    # TODO (nice to have): propagate this to both, instead of hardcoding it
+    # We only support Jellyfish topologies.
+    if not args['topology'].startswith("jelly"):
+        print("We only support the 'Jelly' topology.")
+        raise SystemExit
 
-    random_seed = None # The random seed MUST be 0
-    topo = topologies[args['topology']]()
+    topology_args = args['topology'].split(',')
+    topo_name = topology_args[0]
+    n = int(topology_args[1])
+    k = int(topology_args[2])
+    r = int(topology_args[3])
+
+    seed = int(args['seed'])
+    random.seed(seed)
+
+    routing = args['routing']
+    if routing not in ['ecmp', 'kshort']:
+        print("We only know ECMP and KSHORT routing")
+        raise SystemExit
+
+
+    topo = topologies[topo_name](random_seed=seed,
+        n=n,
+        k=k,
+        r=r)
+
+    # Persist to file so controller can read this info.
+    with open('__jellyconfig', 'w', os.O_NONBLOCK) as config_file:
+        config_file.write('n=%d\n' % n)
+        config_file.write('k=%d\n' % k)
+        config_file.write('r=%d\n' % r)
+        config_file.write('seed=%d\n' % seed)
+        config_file.write('routing=%s\n' % routing)
+        config_file.flush()
 
     # Create Mininet network with a custom controller
-    net = Mininet(topo=topo, controller=JellyfishController)
+    net = Mininet(topo=topo, controller=JellyfishController, link=TCLink)
 
     # We need to tell each host the MAC address of every other host.
     set_host_arps(net)
+
+    # Display the topology
+    if args['display']:
+        print("\n\n==== Displaying topology ...")
+        g = nx.Graph()
+        g.add_nodes_from(topo.nodes())
+        g.add_edges_from(topo.links())
+        nx.draw(g, with_labels=True)
+        plt.show()
 
     #print(net.links[0])
     #print((net.links[0].intf1.MAC(), net.links[0].intf2.MAC()))
@@ -273,11 +331,3 @@ if __name__ == '__main__':
     elif args['cli']:
         CLI(net)
 
-    # Display the topology
-    if args['display']:
-        print("\n\n==== Displaying topology ...")
-        g = nx.Graph()
-        g.add_nodes_from(topo.nodes())
-        g.add_edges_from(topo.links())
-        nx.draw(g, with_labels=True)
-        plt.show()
