@@ -103,7 +103,7 @@ def monitor_throughput(popens, P, rounds, host_throughput):
             else:
                 if '[SUM]' in line:
                     host_lines[host.name] = line.strip()
-            print("<%s>: %s" % (host.name, line.strip()))
+            #print("<%s>: %s" % (host.name, line.strip()))
 
     # Update the per-server throughput values after each round.
     update_server_throughputs(host_lines, host_throughput, rounds)
@@ -177,7 +177,7 @@ def rand_perm_traffic(net, P=1, rounds=5):
         # NOTE: we are setting the NIC rate by specifying the bandwidth
         #       field of each TCLink object.
         print('Average server throughput: {}'.format(avg_throughput))
-        print('Percentage of NIC rate: {:.1%}%'.format(avg_throughput/NIC_RATE))
+        print('Percentage of NIC rate: {:.1%}'.format(avg_throughput/NIC_RATE))
 
 def print_switches(net, n_interfaces=3):
     """
