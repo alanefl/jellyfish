@@ -18,7 +18,6 @@ JellyfishController class.
 
 import sys
 import os
-from os.path import expanduser
 sys.path.append("../../")
 from pox.core import core
 from pox.lib.util import dpidToStr
@@ -213,7 +212,7 @@ def launch ():
   # Read out configuration from file.
 
   # NOTE: assumes jellyfish has been installed in the home directory.
-  config_loc = expanduser("~") + '/jellyfish/pox/pox/ext/__jellyconfig'
+  config_loc = os.environ['HOME'] + '/jellyfish/pox/pox/ext/__jellyconfig'
   with open(config_loc, 'r', os.O_NONBLOCK) as config_file:
     log.info("inside")
     n = int(config_file.readline().split('=')[1])
